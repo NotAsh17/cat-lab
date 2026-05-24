@@ -6,7 +6,20 @@ const KEYS = {
   BOOKMARKS: 'cat_bookmarks',
   STREAK: 'cat_streak',
   COMPLETED_DAYS: 'cat_completed_days',
+  BANK_VERSION: 'cat_bank_version',
+  LAST_SYNC: 'cat_last_sync',
 };
+
+let syncAdapter = null;
+
+function safeJsonParse(raw, fallback) {
+  if (!raw) return fallback;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return fallback;
+  }
+}
 
 function localDateKey(date = new Date()) {
   const y = date.getFullYear();
@@ -16,6 +29,26 @@ function localDateKey(date = new Date()) {
 }
 
 export const Storage = {
+  setSyncAdapter(adapter) {
+    syncAdapter = adapter;
+  },
+
+  getBankVersion() {
+    return localStorage.getItem(KEYS.BANK_VERSION) || 'unknown';
+  },
+
+  setBankVersion(version) {
+    if (version) localStorage.setItem(KEYS.BANK_VERSION, version);
+  },
+
+  getLastSync() {
+    return localStorage.getItem(KEYS.LAST_SYNC);
+  },
+
+  setLastSync(date = new Date()) {
+    localStorage.setItem(KEYS.LAST_SYNC, date.toISOString());
+  },
+
   getTheme() {
     return localStorage.getItem(KEYS.THEME) || 'dark';
   },
@@ -40,7 +73,7 @@ export const Storage = {
       localStorage.setItem(KEYS.PROFILES, JSON.stringify(defaults));
       return defaults;
     }
-    return JSON.parse(list);
+    return safeJsonParse(list, [{ name: 'User', avatar: 'U' }]);
   },
 
   addProfile(name) {
@@ -53,7 +86,11 @@ export const Storage = {
 
   getBookmarks() {
     const raw = localStorage.getItem(KEYS.BOOKMARKS);
-    return raw ? JSON.parse(raw) : [];
+    return safeJsonParse(raw, []);
+  },
+
+  setBookmarks(bookmarks) {
+    localStorage.setItem(KEYS.BOOKMARKS, JSON.stringify(bookmarks || []));
   },
 
   saveBookmark(question, section, passageTitle = null, passageText = null) {
@@ -68,7 +105,7 @@ export const Storage = {
         bookmarkedAt: new Date().toISOString(),
       });
       localStorage.setItem(KEYS.BOOKMARKS, JSON.stringify(bookmarks));
-      this.syncWithSupabase('bookmark_add', { question_id: question.id });
+      this.syncWithSupabase('bookmark_add', bookmarks.find((x) => x.id === question.id));
     }
   },
 
@@ -84,24 +121,29 @@ export const Storage = {
 
   getHistory() {
     const raw = localStorage.getItem(KEYS.HISTORY);
-    return raw ? JSON.parse(raw) : [];
+    return safeJsonParse(raw, []);
+  },
+
+  setHistory(history) {
+    localStorage.setItem(KEYS.HISTORY, JSON.stringify(history || []));
   },
 
   saveAttempt(attempt) {
     const history = this.getHistory();
-    history.push({
+    const savedAttempt = {
       ...attempt,
       id: attempt.id || Math.random().toString(36).slice(2, 11),
       completedAt: new Date().toISOString(),
-    });
+    };
+    history.push(savedAttempt);
     localStorage.setItem(KEYS.HISTORY, JSON.stringify(history));
     this.updateStreak();
-    this.syncWithSupabase('attempt_save', attempt);
+    this.syncWithSupabase('attempt_save', savedAttempt);
   },
 
   getCompletedDays() {
     const raw = localStorage.getItem(KEYS.COMPLETED_DAYS);
-    return raw ? JSON.parse(raw) : {};
+    return safeJsonParse(raw, {});
   },
 
   completeDay(dayNumber) {
@@ -132,6 +174,7 @@ export const Storage = {
     const done = this.getDailyDone();
     done[sectionId] = true;
     localStorage.setItem('cat_daily_done', JSON.stringify(done));
+    this.syncWithSupabase('day_complete', { day: sectionId });
   },
 
   clearDailyDone() {
@@ -140,7 +183,7 @@ export const Storage = {
 
   getStreak() {
     const raw = localStorage.getItem(KEYS.STREAK);
-    return raw ? JSON.parse(raw) : { current: 0, lastActive: null };
+    return safeJsonParse(raw, { current: 0, lastActive: null });
   },
 
   updateStreak() {
@@ -155,7 +198,32 @@ export const Storage = {
     localStorage.setItem(KEYS.STREAK, JSON.stringify(streak));
   },
 
+  clearLocal(scope = 'all') {
+    if (scope === 'all' || scope === 'history') localStorage.removeItem(KEYS.HISTORY);
+    if (scope === 'all' || scope === 'bookmarks') localStorage.removeItem(KEYS.BOOKMARKS);
+    if (scope === 'all' || scope === 'daily') {
+      localStorage.removeItem(KEYS.COMPLETED_DAYS);
+      localStorage.removeItem('cat_daily_done');
+      localStorage.removeItem(KEYS.STREAK);
+    }
+    if (scope === 'all' || scope === 'settings') {
+      localStorage.removeItem(KEYS.THEME);
+      localStorage.removeItem(KEYS.PROFILE);
+      localStorage.removeItem(KEYS.PROFILES);
+      localStorage.removeItem(KEYS.LAST_SYNC);
+    }
+  },
+
   async syncWithSupabase(action, payload) {
-    console.log(`[Supabase Sync] Action: ${action}`, payload);
+    if (!syncAdapter) return;
+    try {
+      if (action === 'bookmark_add') await syncAdapter.saveBookmark(payload, this.getBankVersion());
+      if (action === 'bookmark_remove') await syncAdapter.removeBookmark(payload.question_id);
+      if (action === 'attempt_save') await syncAdapter.saveAttempt(payload, this.getBankVersion());
+      if (action === 'day_complete') await syncAdapter.saveCompletedDay(payload.day);
+      this.setLastSync();
+    } catch (error) {
+      console.warn(`[Supabase Sync] ${action} failed`, error);
+    }
   },
 };

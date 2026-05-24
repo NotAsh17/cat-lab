@@ -11,6 +11,8 @@ import Results from './components/Results';
 import Bookmarks from './components/Bookmarks';
 import Analytics from './components/Analytics';
 import Practice from './components/Practice';
+import ProfileSync from './components/ProfileSync';
+import { CloudSync } from './services/cloudSync';
 
 export default function App() {
   const [currentView, setView] = useState('dashboard');
@@ -25,6 +27,10 @@ export default function App() {
   const [history, setHistory] = useState([]);
 
   useEffect(() => {
+    Storage.setSyncAdapter(CloudSync);
+  }, []);
+
+  useEffect(() => {
     Storage.setTheme(theme);
   }, [theme]);
 
@@ -36,6 +42,7 @@ export default function App() {
       })
       .then((data) => {
         window.__CAT_BANK_SIZE__ = (data?.varc?.questions?.length || 0) + (data?.qa?.questions?.length || 0);
+        Storage.setBankVersion(data.bank_version || data.manifest?.bank_version || 'unknown');
         setDb(data);
         setDbError('');
         updateStatsAndHistory();
@@ -268,6 +275,8 @@ export default function App() {
         return <Bookmarks onStartPractice={(testId, isUntimed, customQuestions) => startTestRunner('bookmarks', testId, isUntimed, customQuestions)} />;
       case 'analytics':
         return <Analytics stats={stats} history={history} />;
+      case 'profile_sync':
+        return <ProfileSync theme={theme} setTheme={setTheme} profile={profile} setProfile={handleProfileChange} onDataChanged={updateStatsAndHistory} />;
       case 'test_runner_varc':
       case 'test_runner_qa':
       case 'test_runner_daily':

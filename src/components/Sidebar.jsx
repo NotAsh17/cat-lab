@@ -9,7 +9,8 @@ import {
   Sun, 
   Moon, 
   UserCheck,
-  Layers
+  Layers,
+  Cloud
 } from 'lucide-react';
 import { Storage } from '../services/storage';
 
@@ -30,6 +31,7 @@ export default function Sidebar({
     { id: 'qa_sectional', name: 'QA Sectional', icon: Calculator },
     { id: 'bookmarks', name: 'Bookmarks', icon: Bookmark },
     { id: 'analytics', name: 'Analytics', icon: BarChart3 },
+    { id: 'profile_sync', name: 'Profile & Sync', icon: Cloud },
   ];
 
   // Render a GitHub-style Mon-Sun grid representing the current week
