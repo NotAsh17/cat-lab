@@ -10,7 +10,8 @@ import {
   Moon, 
   UserCheck,
   Layers,
-  Cloud
+  Cloud,
+  FileText
 } from 'lucide-react';
 import { Storage } from '../services/storage';
 
@@ -27,6 +28,7 @@ export default function Sidebar({
     { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
     { id: 'dailies', name: 'Dailies', icon: CalendarDays },
     { id: 'practice', name: 'Practice by Type', icon: Layers },
+    { id: 'mocks', name: 'Full Mocks', icon: FileText },
     { id: 'varc_sectional', name: 'VARC Sectional', icon: BookOpen },
     { id: 'qa_sectional', name: 'QA Sectional', icon: Calculator },
     { id: 'bookmarks', name: 'Bookmarks', icon: Bookmark },
@@ -115,6 +117,7 @@ export default function Sidebar({
             const isActive = currentView === item.id || 
               (item.id === 'varc_sectional' && currentView === 'test_runner_varc') ||
               (item.id === 'qa_sectional' && currentView === 'test_runner_qa') ||
+              (item.id === 'mocks' && currentView === 'test_runner_mock') ||
               (item.id === 'dailies' && currentView === 'test_runner_daily') ||
               (item.id === 'practice' && currentView === 'test_runner_practice');
 

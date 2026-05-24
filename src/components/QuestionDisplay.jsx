@@ -86,6 +86,14 @@ export function BlockRenderer({ block, compact = false }) {
 
 export function PassageDisplay({ passage, fontSize = 'text-base' }) {
   if (!passage) return null;
+  if (passage.html) {
+    return (
+      <div
+        className={`${fontSize} source-html font-serif leading-relaxed text-text-main/90 max-w-2xl`}
+        dangerouslySetInnerHTML={{ __html: sanitizeHtml(passage.html) }}
+      />
+    );
+  }
   const paragraphs = passage.paragraphs?.length ? passage.paragraphs : String(passage.passage || '').split(/\n\s*\n/).filter(Boolean);
   return (
     <div className={`${fontSize} font-serif leading-relaxed text-text-main/90 space-y-6 max-w-2xl`}>

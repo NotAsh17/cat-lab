@@ -12,6 +12,8 @@ import Bookmarks from './components/Bookmarks';
 import Analytics from './components/Analytics';
 import Practice from './components/Practice';
 import ProfileSync from './components/ProfileSync';
+import Mocks from './components/Mocks';
+import FullMockRunner from './components/FullMockRunner';
 import { CloudSync } from './services/cloudSync';
 
 export default function App() {
@@ -41,7 +43,8 @@ export default function App() {
         return res.json();
       })
       .then((data) => {
-        window.__CAT_BANK_SIZE__ = (data?.varc?.questions?.length || 0) + (data?.qa?.questions?.length || 0);
+        const mockQuestions = (data?.mocks?.full || []).reduce((sum, mock) => sum + (mock.questionCount || 0), 0);
+        window.__CAT_BANK_SIZE__ = (data?.varc?.questions?.length || 0) + (data?.qa?.questions?.length || 0) + mockQuestions;
         Storage.setBankVersion(data.bank_version || data.manifest?.bank_version || 'unknown');
         setDb(data);
         setDbError('');
@@ -74,6 +77,7 @@ export default function App() {
     setActiveTestConfig({ testType: type, testId: id, untimed: isUntimed, customQuestions, paper });
     if (type === 'qa_sectional') setView('test_runner_qa');
     else if (type === 'varc_sectional') setView('test_runner_varc');
+    else if (type === 'full_mock') setView('test_runner_mock');
     else if (type === 'practice' || type === 'bookmarks') setView('test_runner_practice');
     else setView('test_runner_daily');
   };
@@ -92,6 +96,7 @@ export default function App() {
     if (!activeTestConfig) return;
     if (activeTestConfig.testType === 'qa_sectional') setView('test_runner_qa');
     else if (activeTestConfig.testType === 'varc_sectional') setView('test_runner_varc');
+    else if (activeTestConfig.testType === 'full_mock') setView('test_runner_mock');
     else if (activeTestConfig.testType === 'practice' || activeTestConfig.testType === 'bookmarks') setView('test_runner_practice');
     else setView('test_runner_daily');
   };
@@ -271,6 +276,8 @@ export default function App() {
         return renderSectionalSelector('varc_sectional', 'VARC Sectional');
       case 'qa_sectional':
         return renderSectionalSelector('qa_sectional', 'Quantitative Aptitude');
+      case 'mocks':
+        return <Mocks db={db} history={history} onStartMock={(mock) => startTestRunner('full_mock', mock.id, false, null, mock)} />;
       case 'bookmarks':
         return <Bookmarks onStartPractice={(testId, isUntimed, customQuestions) => startTestRunner('bookmarks', testId, isUntimed, customQuestions)} />;
       case 'analytics':
@@ -288,6 +295,14 @@ export default function App() {
             testId={activeTestConfig.testId}
             untimed={activeTestConfig.untimed}
             customQuestions={activeTestConfig.customQuestions}
+            paper={activeTestConfig.paper}
+            onFinishTest={handleFinishTest}
+            onExit={() => setView('dashboard')}
+          />
+        );
+      case 'test_runner_mock':
+        return (
+          <FullMockRunner
             paper={activeTestConfig.paper}
             onFinishTest={handleFinishTest}
             onExit={() => setView('dashboard')}

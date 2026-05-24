@@ -104,6 +104,12 @@ export function displayInstruction(question, index = null) {
   if (type.startsWith('rc_')) {
     return 'Read the passage and answer the following question.';
   }
+  if (type.startsWith('lrdi_')) {
+    return question?.instruction || 'Refer to the data and answer the following question.';
+  }
+  if (type.startsWith('qa_')) {
+    return question?.instruction || '';
+  }
   if (type === 'va_para_jumble_tita' || type === 'va_para_jumble_mcq') {
     return `Directions for question${n}: Arrange the given sentences to form a coherent paragraph.`;
   }

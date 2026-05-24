@@ -3,7 +3,8 @@
   Clock, 
   Compass, 
   ChevronRight, 
-  CheckCircle2,} from 'lucide-react';
+  CheckCircle2,
+  FileText,} from 'lucide-react';
 
 export default function Dashboard({ setView, stats, history, onOpenAttempt }) {
   const totalQuestions = Math.max(1, stats.totalQuestions || 150);
@@ -71,7 +72,7 @@ export default function Dashboard({ setView, stats, history, onOpenAttempt }) {
       </div>
 
       {/* Quick Launch & Dailies */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-6 mb-10">
         <div className="bg-bg-surface border border-border-subtle rounded-xl p-6 flex flex-col justify-between hover:border-brand-gold/30 transition-all duration-300 group">
           <div>
             <div className="w-10 h-10 rounded-lg bg-indigo-950/40 border border-indigo-800/40 flex items-center justify-center text-indigo-400 mb-4">
@@ -87,6 +88,25 @@ export default function Dashboard({ setView, stats, history, onOpenAttempt }) {
             className="mt-6 w-full py-2 bg-indigo-950/20 border border-indigo-800/40 rounded-lg text-xs font-semibold text-indigo-300 hover:bg-indigo-650 hover:text-white transition flex items-center justify-center space-x-1"
           >
             <span>Enter Dailies</span>
+            <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition" />
+          </button>
+        </div>
+
+        <div className="bg-bg-surface border border-border-subtle rounded-xl p-6 flex flex-col justify-between hover:border-brand-gold/30 transition-all duration-300 group">
+          <div>
+            <div className="w-10 h-10 rounded-lg bg-brand-blue/10 border border-brand-blue/20 flex items-center justify-center text-brand-blue mb-4">
+              <FileText className="w-5 h-5" />
+            </div>
+            <h3 className="text-lg font-semibold text-text-main font-serif">Full Mocks</h3>
+            <p className="text-xs text-text-muted mt-2 leading-relaxed">
+              Complete SIMCAT papers with VARC, LRDI, and QA in fixed CAT order. Break only between sections.
+            </p>
+          </div>
+          <button
+            onClick={() => setView('mocks')}
+            className="mt-6 w-full py-2 bg-brand-blue/10 border border-brand-blue/20 rounded-lg text-xs font-semibold text-brand-blue hover:bg-brand-blue hover:text-white transition flex items-center justify-center space-x-1"
+          >
+            <span>Enter Mocks</span>
             <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition" />
           </button>
         </div>
@@ -150,13 +170,15 @@ export default function Dashboard({ setView, stats, history, onOpenAttempt }) {
                 minute: '2-digit' 
               });
               const isVarc = h.testId.includes('varc');
+              const isFullMock = h.testType === 'full_mock' || h.testId.includes('full_mock');
+              const label = isFullMock ? 'Full Mock' : isVarc ? 'VARC Sectional' : 'QA Sectional';
               return (
                 <button key={h.id || i} type="button" onClick={() => onOpenAttempt?.(h)} className="flex w-full items-center justify-between p-3.5 bg-bg-base border border-border-subtle rounded-lg text-xs hover:border-brand-gold/25 hover:bg-bg-card/40 transition text-left">
                   <div className="flex items-center space-x-3">
-                    <CheckCircle2 className={`w-4 h-4 ${isVarc ? 'text-brand-gold' : 'text-brand-green'}`} />
+                    <CheckCircle2 className={`w-4 h-4 ${isFullMock || isVarc ? 'text-brand-gold' : 'text-brand-green'}`} />
                     <div>
                       <div className="font-semibold text-text-main font-mono">
-                        {isVarc ? 'VARC Sectional' : 'QA Sectional'} (Mock #{h.testId.split('-').pop()})
+                        {label} ({h.paper?.title || `Mock #${h.testId.split('-').pop()}`})
                       </div>
                       <div className="text-[10px] text-text-faint font-mono mt-0.5">
                         {formattedDate} | Completed
