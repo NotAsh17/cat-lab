@@ -1,0 +1,166 @@
+@import "tailwindcss";
+
+@font-face {
+  font-family: "Bookerly";
+  src: url("./assets/fonts/Bookerly.ttf") format("truetype");
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Bookerly";
+  src: url("./assets/fonts/Bookerly Italic.ttf") format("truetype");
+  font-weight: 400;
+  font-style: italic;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Bookerly";
+  src: url("./assets/fonts/Bookerly Bold.ttf") format("truetype");
+  font-weight: 700;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Bookerly";
+  src: url("./assets/fonts/Bookerly Bold Italic.ttf") format("truetype");
+  font-weight: 700;
+  font-style: italic;
+  font-display: swap;
+}
+
+@theme {
+  --font-sans: Bookerly, Georgia, "Times New Roman", Times, serif;
+  --font-serif: Bookerly, Georgia, "Times New Roman", Times, serif;
+  --font-mono: Consolas, Monaco, "Courier New", monospace;
+
+  --color-brand-gold: #c9964a;
+  --color-brand-gold-hover: #e0b06a;
+  --color-brand-green: #3d9e6b;
+  --color-brand-red: #c45050;
+  --color-brand-blue: #4a7fc1;
+  --color-purple-review: #8b6ee8;
+
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-bg-card: var(--bg-card);
+  --color-border-subtle: var(--border-subtle);
+  --color-text-main: var(--text-main);
+  --color-text-muted: var(--text-muted);
+  --color-text-faint: var(--text-faint);
+}
+
+:root {
+  --bg-base: #0b0c0e;
+  --bg-surface: #121316;
+  --bg-card: #18191d;
+  --border-subtle: #22242a;
+  --text-main: #dedad4;
+  --text-muted: #8b8992;
+  --text-faint: #4e4c54;
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  --bg-base: #fbfbf9;
+  --bg-surface: #f5f4ef;
+  --bg-card: #eae8e0;
+  --border-subtle: #dbd8cd;
+  --text-main: #24292e;
+  --text-muted: #57606a;
+  --text-faint: #9c9a92;
+  --color-purple-review: #6f55d9;
+  color-scheme: light;
+}
+
+[data-theme="light"] .text-brand-gold {
+  color: #8a5a14;
+}
+
+[data-theme="light"] .text-brand-blue {
+  color: #275f9d;
+}
+
+[data-theme="light"] .text-purple-review {
+  color: #5f46c5;
+}
+
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: var(--bg-base);
+}
+
+::-webkit-scrollbar-thumb {
+  background: var(--border-subtle);
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--text-faint);
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-main);
+  font-family: Bookerly, Georgia, "Times New Roman", Times, serif;
+  transition: background-color 0.2s ease, color 0.2s ease;
+  min-height: 100vh;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(4px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+.source-html {
+  line-height: 1.65;
+  color: inherit;
+}
+
+.source-html * {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+.source-html p,
+.source-html div {
+  margin: 0.45rem 0;
+}
+
+.source-html table {
+  border-collapse: collapse;
+  width: 100%;
+  margin: 0.75rem 0;
+}
+
+.source-html td,
+.source-html th {
+  border: 1px solid var(--border-subtle);
+  padding: 0.4rem 0.55rem;
+  vertical-align: top;
+}
+
+.source-html img {
+  max-width: 100%;
+  height: auto;
+  display: block;
+  margin: 0.75rem 0;
+  border-radius: 0.375rem;
+  background: white;
+}
+
+.option-html p,
+.option-html div {
+  margin: 0;
+}

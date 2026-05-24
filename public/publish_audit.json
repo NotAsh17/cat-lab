@@ -1,0 +1,9 @@
+{
+  "generated_at": "2026-05-21T12:52:21.038395+00:00",
+  "input": "D:\\cat\\bank\\normalized\\cat_bank_clean.min.json",
+  "output": "D:\\New folder\\cat\\practice_platform\\public\\questions_db.json",
+  "questions": 11836,
+  "passages": 1101,
+  "assets": 14323,
+  "publish_errors": []
+}
