@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bookmark, CheckCircle, ChevronLeft, ChevronRight, Copy, HelpCircle, Play, Type, XCircle } from 'lucide-react';
 import { Storage } from '../services/storage';
-import { answerOutcome, displayInstruction, isTitaQuestion } from '../services/questionUtils';
+import { answerOutcome, displayInstruction, isTitaQuestion, questionSection } from '../services/questionUtils';
 import { optionDisplayKey, shouldStripOptionKeys } from '../services/optionRenderUtils';
 import { OptionContent, PassageDisplay, QuestionStem } from './QuestionDisplay';
 
@@ -320,7 +320,7 @@ export default function FullMockRunner({ paper, onFinishTest, onExit }) {
     } else {
       Storage.saveBookmark(
         activeQuestion,
-        activeSection?.id || 'mock',
+        questionSection(activeQuestion, activeSection?.id || 'varc'),
         activePassage?.source_label || paper.title,
         activePassage?.paragraphs?.join('\n\n') || '',
       );

@@ -1,4 +1,4 @@
-import { answerOutcome, isQaQuestion } from './questionUtils';
+import { answerOutcome, questionSection, questionTypeGroup, questionTypeLabel } from './questionUtils';
 import { isSupabaseConfigured, supabase } from './supabaseClient';
 
 function nowIso() {
@@ -137,11 +137,12 @@ export const CloudSync = {
 
   async saveBookmark(bookmark, bankVersion) {
     const user = await ensureSignedInUser();
+    const section = questionSection(bookmark.question, bookmark.section || 'varc');
     const { error } = await supabase.from('bookmarks').upsert({
       user_id: user.id,
       question_id: bookmark.id,
       bank_version: bankVersion,
-      section: bookmark.section,
+      section,
       passage_title: bookmark.passageTitle,
       passage_text: bookmark.passageText,
       question: compactQuestion(bookmark.question),
@@ -175,6 +176,9 @@ export const CloudSync = {
       id: row.question_id,
       section: row.section,
       question: row.question,
+      type: row.question?.question_type || row.question?.type,
+      typeGroup: questionTypeGroup(row.question),
+      typeLabel: questionTypeLabel(row.question),
       passageTitle: row.passage_title,
       passageText: row.passage_text,
       bookmarkedAt: row.bookmarked_at,
@@ -215,7 +219,7 @@ export const CloudSync = {
         user_id: user.id,
         question_id: q.id,
         question_index: idx,
-        section: isQaQuestion(q) ? 'qa' : 'varc',
+        section: questionSection(q),
         answer: answer === undefined ? null : String(answer),
         outcome: answerOutcome(q, answer),
         marked: (attempt.marked || []).includes(q.id),
@@ -294,13 +298,29 @@ export const CloudSync = {
 
   async saveCompletedDay(sectionId) {
     const user = await ensureSignedInUser();
+    const payload = typeof sectionId === 'object' ? sectionId : { sectionId };
     const { error } = await supabase.from('completed_days').upsert({
       user_id: user.id,
-      day_key: localDateKey(),
-      section_id: sectionId,
-      completed_at: nowIso(),
+      day_key: payload.dayKey || localDateKey(),
+      section_id: String(payload.sectionId || payload.day || sectionId),
+      completed_at: payload.completedAt || nowIso(),
     }, { onConflict: 'user_id,day_key,section_id' });
     if (error) throw error;
+  },
+
+  async loadCompletedDays() {
+    const user = await ensureSignedInUser();
+    const { data, error } = await supabase
+      .from('completed_days')
+      .select('*')
+      .eq('user_id', user.id)
+      .order('completed_at', { ascending: false });
+    if (error) throw error;
+    return (data || []).map((row) => ({
+      dayKey: row.day_key,
+      sectionId: row.section_id,
+      completedAt: row.completed_at,
+    }));
   },
 
   async clearCloud(scope = 'all') {

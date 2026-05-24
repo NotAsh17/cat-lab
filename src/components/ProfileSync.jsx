@@ -32,7 +32,8 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
   const userEmail = session?.user?.email;
   const protocol = useMemo(() => [
     'Shared papers use only seed + bank version. Profile history never changes daily or weekly paper generation.',
-    'Submitted attempts are append-only. Bookmarks and settings use last-write-wins.',
+    'After sign-in, the app pulls cloud state, merges local state, then pushes missing local rows automatically.',
+    'Submitted attempts are append-only. Bookmarks, completed dailies, and settings use last-write-wins.',
     'Every accepted cloud row belongs to auth.uid() through Supabase RLS.',
     'Local mode remains usable without login. Cloud sync starts only after sign-in.',
   ], []);
@@ -100,19 +101,44 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
     for (const attempt of Storage.getHistory()) {
       await CloudSync.saveAttempt(attempt, bankVersion);
     }
+    for (const day of Storage.getCompletedDayRows()) {
+      await CloudSync.saveCompletedDay(day);
+    }
   });
 
   const pullCloud = () => run('Pulling cloud state', async () => {
     await CloudSync.ensureProfile(displayName || userEmail || 'CAT User');
-    const [settings, bookmarks, attempts] = await Promise.all([
+    const [settings, bookmarks, attempts, completedDays] = await Promise.all([
       CloudSync.loadSettings(),
       CloudSync.loadBookmarks(),
       CloudSync.loadAttempts(),
+      CloudSync.loadCompletedDays(),
     ]);
     if (settings?.theme) setTheme(settings.theme);
     if (settings?.active_local_profile) setProfile(settings.active_local_profile);
     Storage.setBookmarks(mergeById(Storage.getBookmarks(), bookmarks));
     Storage.setHistory(mergeById(Storage.getHistory(), attempts));
+    Storage.applyCompletedDayRows(completedDays);
+  });
+
+  const syncNow = () => run('Syncing account state', async () => {
+    await CloudSync.ensureProfile(displayName || userEmail || 'CAT User');
+    const [settings, bookmarks, attempts, completedDays] = await Promise.all([
+      CloudSync.loadSettings(),
+      CloudSync.loadBookmarks(),
+      CloudSync.loadAttempts(),
+      CloudSync.loadCompletedDays(),
+    ]);
+    if (settings?.theme) setTheme(settings.theme);
+    if (settings?.active_local_profile) setProfile(settings.active_local_profile);
+    Storage.setBookmarks(mergeById(Storage.getBookmarks(), bookmarks));
+    Storage.setHistory(mergeById(Storage.getHistory(), attempts));
+    Storage.applyCompletedDayRows([...Storage.getCompletedDayRows(), ...completedDays]);
+    const bankVersion = Storage.getBankVersion();
+    for (const bookmark of Storage.getBookmarks()) await CloudSync.saveBookmark(bookmark, bankVersion);
+    for (const attempt of Storage.getHistory()) await CloudSync.saveAttempt(attempt, bankVersion);
+    for (const day of Storage.getCompletedDayRows()) await CloudSync.saveCompletedDay(day);
+    await CloudSync.updateSettings({ theme, activeLocalProfile: profile, extra: { displayName } });
   });
 
   const clearLocal = (scope) => {
@@ -134,7 +160,7 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
         <span className="font-mono text-xs font-semibold uppercase tracking-wider text-brand-gold">Account & Sync</span>
         <h2 className="mt-1 font-serif text-3xl font-bold tracking-tight text-text-main">Profile & Cloud Sync</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted">
-          Sync bookmarks, attempts, and settings across devices. The question bank stays static; your profile only stores practice state.
+          Sign in once, then bookmarks, attempts, completed dailies, and recent sessions sync behind your account.
         </p>
       </div>
 
@@ -224,8 +250,8 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
               <span><b className="block text-sm text-text-main">Pull cloud to local</b><span className="text-xs text-text-muted">Merge cloud bookmarks and attempts into this browser.</span></span>
               <Download className="h-4 w-4 text-brand-gold" />
             </button>
-            <button onClick={() => { pushLocal(); }} disabled={!userEmail || busy} className="flex items-center justify-between rounded-xl border border-border-subtle bg-bg-card px-4 py-3 text-left transition hover:border-brand-gold/40 disabled:opacity-40">
-              <span><b className="block text-sm text-text-main">Manual sync now</b><span className="text-xs text-text-muted">Same as push. Pull separately when changing devices.</span></span>
+            <button onClick={syncNow} disabled={!userEmail || busy} className="flex items-center justify-between rounded-xl border border-border-subtle bg-bg-card px-4 py-3 text-left transition hover:border-brand-gold/40 disabled:opacity-40">
+              <span><b className="block text-sm text-text-main">Sync now</b><span className="text-xs text-text-muted">Pull cloud, merge local, then push missing rows.</span></span>
               <RefreshCcw className="h-4 w-4 text-brand-gold" />
             </button>
           </div>

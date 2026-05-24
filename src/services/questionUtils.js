@@ -12,6 +12,44 @@ export function isQaQuestion(question) {
   return question?.section === 'QA' || type.startsWith('qa_');
 }
 
+export function questionSection(question, fallback = 'varc') {
+  const type = questionType(question);
+  const rawSection = String(question?.section || question?.section_id || question?.subsection || '').toLowerCase();
+  if (rawSection.includes('lrdi') || type.startsWith('lrdi_')) return 'lrdi';
+  if (rawSection === 'qa' || rawSection.includes('quant') || type.startsWith('qa_')) return 'qa';
+  if (rawSection === 'varc' || type.startsWith('rc_') || type.startsWith('va_')) return 'varc';
+  return fallback;
+}
+
+export function questionTypeGroup(question) {
+  const type = questionType(question);
+  if (type.startsWith('rc_')) return 'rc';
+  if (type === 'va_para_jumble_tita' || type === 'va_para_jumble_mcq') return 'va_para_jumble';
+  if (type === 'va_odd_one_out_tita') return 'va_odd_one_out';
+  if (type === 'va_summary_mcq' || type === 'va_summary_tita') return 'va_summary';
+  if (type === 'va_sentence_placement_mcq') return 'va_sentence_placement';
+  if (type === 'va_para_completion_mcq') return 'va_para_completion';
+  if (type.startsWith('lrdi_')) return 'lrdi';
+  if (type.startsWith('qa_')) return 'qa';
+  return type || 'misc';
+}
+
+export function questionTypeLabel(question) {
+  const group = questionTypeGroup(question);
+  const labels = {
+    rc: 'Reading Comprehension',
+    va_para_jumble: 'Para Jumble',
+    va_odd_one_out: 'Odd Sentence Out',
+    va_summary: 'Para Summary',
+    va_sentence_placement: 'Sentence Placement',
+    va_para_completion: 'Para Completion',
+    lrdi: 'LRDI',
+    qa: 'Quant',
+    misc: 'Misc',
+  };
+  return labels[group] || group.replace(/_/g, ' ').replace(/\b\w/g, (c) => c.toUpperCase());
+}
+
 export function correctAnswer(question) {
   return String(question?.answer_key || question?.answer || question?.answer_value || '').trim();
 }

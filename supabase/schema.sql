@@ -22,7 +22,7 @@ create table if not exists public.bookmarks (
   user_id uuid not null references auth.users(id) on delete cascade,
   question_id text not null,
   bank_version text,
-  section text not null check (section in ('varc', 'qa')),
+  section text not null check (section in ('varc', 'lrdi', 'qa')),
   passage_title text,
   passage_text text,
   question jsonb not null,
@@ -32,6 +32,11 @@ create table if not exists public.bookmarks (
   deleted_at timestamptz,
   primary key (user_id, question_id)
 );
+
+alter table public.bookmarks drop constraint if exists bookmarks_section_check;
+alter table public.bookmarks
+add constraint bookmarks_section_check
+check (section in ('varc', 'lrdi', 'qa'));
 
 create table if not exists public.attempts (
   id text not null,

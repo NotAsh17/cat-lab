@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play } from 'lucide-react';
 import { Storage } from './services/storage';
 import { generatePaper, weeklySeeds } from './services/paperGenerator';
@@ -16,6 +16,20 @@ import Mocks from './components/Mocks';
 import FullMockRunner from './components/FullMockRunner';
 import { CloudSync } from './services/cloudSync';
 
+function rowTime(row, key = 'completedAt') {
+  return new Date(row?.[key] || row?.completed_at || row?.bookmarkedAt || row?.bookmarked_at || 0).getTime() || 0;
+}
+
+function mergeByIdPreferNewest(localRows = [], cloudRows = [], dateKey = 'completedAt') {
+  const map = new Map();
+  [...localRows, ...cloudRows].forEach((row) => {
+    if (!row?.id) return;
+    const previous = map.get(row.id);
+    if (!previous || rowTime(row, dateKey) >= rowTime(previous, dateKey)) map.set(row.id, row);
+  });
+  return Array.from(map.values());
+}
+
 export default function App() {
   const [currentView, setView] = useState('dashboard');
   const [theme, setTheme] = useState(Storage.getTheme());
@@ -27,9 +41,14 @@ export default function App() {
   const [activeAttempt, setActiveAttempt] = useState(null);
   const [stats, setStats] = useState({ attempted: 0, correct: 0, timeMin: 0 });
   const [history, setHistory] = useState([]);
+  const [syncStatus, setSyncStatus] = useState({ state: 'local', label: 'Local only' });
+  const syncBusyRef = useRef(false);
+  const initialSyncStartedRef = useRef(false);
 
   useEffect(() => {
     Storage.setSyncAdapter(CloudSync);
+    Storage.setSyncStatusListener(setSyncStatus);
+    return () => Storage.setSyncStatusListener(null);
   }, []);
 
   useEffect(() => {
@@ -72,6 +91,75 @@ export default function App() {
     setStats({ attempted, correct, timeMin: Math.round(timeSec / 60), totalQuestions });
     setStreak(Storage.getStreak());
   }
+
+  const syncAccountState = useCallback(async (reason = 'auto') => {
+    if (!CloudSync.isConfigured || !db || syncBusyRef.current) return;
+    syncBusyRef.current = true;
+    setSyncStatus({ state: 'syncing', label: reason === 'signin' ? 'Signing in' : 'Syncing' });
+    try {
+      const session = await CloudSync.getSession();
+      if (!session?.user) {
+        setSyncStatus({ state: 'local', label: 'Local only' });
+        return;
+      }
+
+      await CloudSync.ensureProfile(profile || session.user.email || 'CAT User');
+      const [settings, cloudBookmarks, cloudAttempts, cloudDays] = await Promise.all([
+        CloudSync.loadSettings(),
+        CloudSync.loadBookmarks(),
+        CloudSync.loadAttempts(),
+        CloudSync.loadCompletedDays(),
+      ]);
+
+      if (settings?.theme && settings.theme !== theme) setTheme(settings.theme);
+      if (settings?.active_local_profile && settings.active_local_profile !== profile) {
+        setProfile(settings.active_local_profile);
+        Storage.setActiveProfile(settings.active_local_profile);
+      }
+
+      const mergedBookmarks = mergeByIdPreferNewest(Storage.getBookmarks(), cloudBookmarks, 'bookmarkedAt');
+      const mergedAttempts = mergeByIdPreferNewest(Storage.getHistory(), cloudAttempts, 'completedAt')
+        .sort((a, b) => rowTime(b, 'completedAt') - rowTime(a, 'completedAt'));
+
+      Storage.setBookmarks(mergedBookmarks);
+      Storage.setHistory(mergedAttempts);
+      Storage.applyCompletedDayRows([...Storage.getCompletedDayRows(), ...(cloudDays || [])]);
+
+      const bankVersion = Storage.getBankVersion();
+      for (const bookmark of mergedBookmarks) {
+        await CloudSync.saveBookmark(bookmark, bankVersion);
+      }
+      for (const attempt of mergedAttempts) {
+        await CloudSync.saveAttempt(attempt, bankVersion);
+      }
+      for (const day of Storage.getCompletedDayRows()) {
+        await CloudSync.saveCompletedDay(day);
+      }
+      await CloudSync.updateSettings({ theme: settings?.theme || theme, activeLocalProfile: settings?.active_local_profile || profile, extra: { displayName: profile } });
+
+      Storage.setLastSync();
+      updateStatsAndHistory();
+      setSyncStatus({ state: 'synced', label: 'Synced' });
+    } catch (error) {
+      console.warn('[Supabase Sync] account sync failed', error);
+      setSyncStatus({ state: 'error', label: 'Sync failed', detail: error?.message || String(error) });
+    } finally {
+      syncBusyRef.current = false;
+    }
+  }, [db, profile, theme]);
+
+  useEffect(() => {
+    if (!db || !CloudSync.isConfigured) return undefined;
+    if (!initialSyncStartedRef.current) {
+      initialSyncStartedRef.current = true;
+      syncAccountState('startup');
+    }
+    const sub = CloudSync.onAuthStateChange((session) => {
+      if (session?.user) syncAccountState('signin');
+      else setSyncStatus({ state: 'local', label: 'Local only' });
+    });
+    return () => sub?.unsubscribe?.();
+  }, [db, syncAccountState]);
 
   const startTestRunner = (type, id, isUntimed = false, customQuestions = null, paper = null) => {
     setActiveTestConfig({ testType: type, testId: id, untimed: isUntimed, customQuestions, paper });
@@ -328,6 +416,7 @@ export default function App() {
           streak={streak}
           profile={profile}
           setProfile={handleProfileChange}
+          syncStatus={syncStatus}
         />
       )}
       <div className="flex-grow min-w-0 overflow-y-auto">{renderMainView()}</div>

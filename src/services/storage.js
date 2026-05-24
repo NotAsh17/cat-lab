@@ -1,3 +1,5 @@
+import { questionSection, questionType, questionTypeGroup, questionTypeLabel, sourceLabel } from './questionUtils';
+
 const KEYS = {
   THEME: 'cat_theme',
   PROFILE: 'cat_active_profile',
@@ -11,6 +13,7 @@ const KEYS = {
 };
 
 let syncAdapter = null;
+let syncStatusListener = null;
 
 function safeJsonParse(raw, fallback) {
   if (!raw) return fallback;
@@ -28,9 +31,20 @@ function localDateKey(date = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
+function emitSyncStatus(status) {
+  syncStatusListener?.({
+    at: new Date().toISOString(),
+    ...status,
+  });
+}
+
 export const Storage = {
   setSyncAdapter(adapter) {
     syncAdapter = adapter;
+  },
+
+  setSyncStatusListener(listener) {
+    syncStatusListener = listener;
   },
 
   getBankVersion() {
@@ -96,9 +110,14 @@ export const Storage = {
   saveBookmark(question, section, passageTitle = null, passageText = null) {
     const bookmarks = this.getBookmarks();
     if (!bookmarks.some((x) => x.id === question.id)) {
+      const normalizedSection = questionSection(question, section || 'varc');
       bookmarks.push({
         id: question.id,
-        section,
+        section: normalizedSection,
+        type: questionType(question),
+        typeGroup: questionTypeGroup(question),
+        typeLabel: questionTypeLabel(question),
+        sourceLabel: sourceLabel(question),
         question,
         passageTitle,
         passageText,
@@ -146,12 +165,58 @@ export const Storage = {
     return safeJsonParse(raw, {});
   },
 
+  setCompletedDays(days) {
+    localStorage.setItem(KEYS.COMPLETED_DAYS, JSON.stringify(days || {}));
+  },
+
+  getCompletedDayRows() {
+    const rows = [];
+    const days = this.getCompletedDays();
+    Object.entries(days).forEach(([sectionId, completedAt]) => {
+      if (!completedAt) return;
+      rows.push({
+        sectionId,
+        dayKey: localDateKey(new Date(completedAt)),
+        completedAt,
+      });
+    });
+
+    const dailyDone = this.getDailyDone();
+    Object.entries(dailyDone).forEach(([sectionId, done]) => {
+      if (sectionId === '_date' || !done) return;
+      rows.push({
+        sectionId,
+        dayKey: dailyDone._date || localDateKey(),
+        completedAt: new Date().toISOString(),
+      });
+    });
+    return rows;
+  },
+
+  applyCompletedDayRows(rows = []) {
+    const days = this.getCompletedDays();
+    const today = localDateKey();
+    const dailyDone = { _date: today };
+
+    rows.forEach((row) => {
+      const sectionId = row.sectionId || row.section_id;
+      const completedAt = row.completedAt || row.completed_at || new Date().toISOString();
+      const dayKey = row.dayKey || row.day_key;
+      if (!sectionId) return;
+      days[sectionId] = completedAt;
+      if (dayKey === today) dailyDone[sectionId] = true;
+    });
+
+    this.setCompletedDays(days);
+    localStorage.setItem('cat_daily_done', JSON.stringify(dailyDone));
+  },
+
   completeDay(dayNumber) {
     const days = this.getCompletedDays();
     days[dayNumber] = new Date().toISOString();
     localStorage.setItem(KEYS.COMPLETED_DAYS, JSON.stringify(days));
     this.updateStreak();
-    this.syncWithSupabase('day_complete', { day: dayNumber });
+    this.syncWithSupabase('day_complete', { sectionId: String(dayNumber) });
   },
 
   resetDays() {
@@ -174,7 +239,7 @@ export const Storage = {
     const done = this.getDailyDone();
     done[sectionId] = true;
     localStorage.setItem('cat_daily_done', JSON.stringify(done));
-    this.syncWithSupabase('day_complete', { day: sectionId });
+    this.syncWithSupabase('day_complete', { sectionId, dayKey: done._date });
   },
 
   clearDailyDone() {
@@ -217,13 +282,17 @@ export const Storage = {
   async syncWithSupabase(action, payload) {
     if (!syncAdapter) return;
     try {
+      emitSyncStatus({ state: 'syncing', label: 'Syncing' });
       if (action === 'bookmark_add') await syncAdapter.saveBookmark(payload, this.getBankVersion());
       if (action === 'bookmark_remove') await syncAdapter.removeBookmark(payload.question_id);
       if (action === 'attempt_save') await syncAdapter.saveAttempt(payload, this.getBankVersion());
-      if (action === 'day_complete') await syncAdapter.saveCompletedDay(payload.day);
+      if (action === 'day_complete') await syncAdapter.saveCompletedDay(payload);
       this.setLastSync();
+      emitSyncStatus({ state: 'synced', label: 'Synced' });
     } catch (error) {
       console.warn(`[Supabase Sync] ${action} failed`, error);
+      const localOnly = /sign in/i.test(error?.message || '');
+      emitSyncStatus({ state: localOnly ? 'local' : 'error', label: localOnly ? 'Local only' : 'Sync failed', detail: error?.message || String(error) });
     }
   },
 };

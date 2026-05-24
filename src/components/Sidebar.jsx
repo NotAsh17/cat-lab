@@ -22,7 +22,8 @@ export default function Sidebar({
   toggleTheme, 
   streak, 
   profile, 
-  setProfile 
+  setProfile,
+  syncStatus,
 }) {
   const navItems = [
     { id: 'dashboard', name: 'Dashboard', icon: LayoutDashboard },
@@ -144,6 +145,19 @@ export default function Sidebar({
 
       {/* Footer Controls */}
       <div className="p-4 border-t border-border-subtle bg-bg-card/50 flex flex-col space-y-4">
+        <div className="flex items-center justify-between rounded-lg border border-border-subtle bg-bg-card px-3 py-2 text-xs">
+          <div className="flex items-center space-x-2">
+            <Cloud className={`h-3.5 w-3.5 ${
+              syncStatus?.state === 'synced' ? 'text-brand-green' :
+              syncStatus?.state === 'syncing' ? 'text-brand-gold animate-pulse' :
+              syncStatus?.state === 'error' ? 'text-brand-red' :
+              'text-text-faint'
+            }`} />
+            <span className="font-mono text-text-muted">{syncStatus?.label || 'Local only'}</span>
+          </div>
+          {Storage.getLastSync() && <span className="font-mono text-[10px] text-text-faint">cloud</span>}
+        </div>
+
         {/* Profile Selector */}
         <div className="flex items-center justify-between px-2 text-xs">
           <div className="flex items-center space-x-2">

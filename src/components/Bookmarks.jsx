@@ -1,17 +1,37 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { Bookmark, BookOpen, Calculator, ChevronDown, ChevronUp, FileText, Play, Trash2 } from 'lucide-react';
 import { Storage } from '../services/storage';
-import { displayInstruction, isTitaQuestion } from '../services/questionUtils';
+import { displayInstruction, isTitaQuestion, questionSection, questionTypeGroup, questionTypeLabel } from '../services/questionUtils';
 import { optionDisplayKey, shouldStripOptionKeys } from '../services/optionRenderUtils';
-import { OptionContent, QuestionExplanation, QuestionPreviewText, QuestionStem } from './QuestionDisplay';
+import { OptionContent, PassageDisplay, QuestionExplanation, QuestionPreviewText, QuestionStem } from './QuestionDisplay';
 
 export default function Bookmarks({ onStartPractice }) {
   const [bookmarks, setBookmarks] = useState(Storage.getBookmarks());
   const [activeIdx, setActiveIdx] = useState(null);
   const [filterSection, setFilterSection] = useState('all');
+  const [filterType, setFilterType] = useState('all');
   const [untimed, setUntimed] = useState(true);
 
-  const filteredBookmarks = filterSection === 'all' ? bookmarks : bookmarks.filter((b) => b.section === filterSection);
+  const bookmarksWithMeta = useMemo(() => bookmarks.map((bookmark) => ({
+    ...bookmark,
+    section: bookmark.section || questionSection(bookmark.question),
+    typeGroup: bookmark.typeGroup || questionTypeGroup(bookmark.question),
+    typeLabel: bookmark.typeLabel || questionTypeLabel(bookmark.question),
+  })), [bookmarks]);
+
+  const varcTypes = useMemo(() => {
+    const seen = new Map();
+    bookmarksWithMeta
+      .filter((b) => b.section === 'varc')
+      .forEach((b) => seen.set(b.typeGroup, b.typeLabel));
+    return Array.from(seen.entries()).map(([id, label]) => ({ id, label }));
+  }, [bookmarksWithMeta]);
+
+  const filteredBookmarks = bookmarksWithMeta.filter((bookmark) => {
+    if (filterSection !== 'all' && bookmark.section !== filterSection) return false;
+    if (filterSection === 'varc' && filterType !== 'all' && bookmark.typeGroup !== filterType) return false;
+    return true;
+  });
 
   const handleRemove = (e, qId) => {
     e.stopPropagation();
@@ -60,30 +80,44 @@ export default function Bookmarks({ onStartPractice }) {
       ) : (
         <div>
           <div className="flex space-x-2 mb-6">
-            {['all', 'varc', 'qa'].map((section) => (
-              <button key={section} onClick={() => { setFilterSection(section); setActiveIdx(null); }} className={`px-3 py-1.5 border rounded-lg text-xs font-mono font-semibold transition ${filterSection === section ? 'border-brand-gold text-brand-gold bg-brand-gold/10' : 'border-border-subtle text-text-muted hover:text-text-main hover:bg-bg-card'}`}>
+            {['all', 'varc', 'lrdi', 'qa'].map((section) => (
+              <button key={section} onClick={() => { setFilterSection(section); setFilterType('all'); setActiveIdx(null); }} className={`px-3 py-1.5 border rounded-lg text-xs font-mono font-semibold transition ${filterSection === section ? 'border-brand-gold text-brand-gold bg-brand-gold/10' : 'border-border-subtle text-text-muted hover:text-text-main hover:bg-bg-card'}`}>
                 {section.toUpperCase()}
               </button>
             ))}
           </div>
+          {filterSection === 'varc' && varcTypes.length > 0 && (
+            <div className="mb-6 flex flex-wrap gap-2">
+              <button onClick={() => { setFilterType('all'); setActiveIdx(null); }} className={`px-3 py-1.5 border rounded-lg text-[10px] font-mono font-semibold transition ${filterType === 'all' ? 'border-brand-gold text-brand-gold bg-brand-gold/10' : 'border-border-subtle text-text-muted hover:text-text-main hover:bg-bg-card'}`}>
+                ALL VARC
+              </button>
+              {varcTypes.map((type) => (
+                <button key={type.id} onClick={() => { setFilterType(type.id); setActiveIdx(null); }} className={`px-3 py-1.5 border rounded-lg text-[10px] font-mono font-semibold transition ${filterType === type.id ? 'border-brand-gold text-brand-gold bg-brand-gold/10' : 'border-border-subtle text-text-muted hover:text-text-main hover:bg-bg-card'}`}>
+                  {type.label}
+                </button>
+              ))}
+            </div>
+          )}
 
           <div className="space-y-3">
             {filteredBookmarks.map((b, idx) => {
               const q = b.question;
               const open = activeIdx === idx;
               const isVarc = b.section === 'varc';
+              const isLrdi = b.section === 'lrdi';
               const tita = isTitaQuestion(q);
               const date = new Date(b.bookmarkedAt).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
               return (
                 <div key={b.id} className="bg-bg-surface border border-border-subtle rounded-xl overflow-hidden transition-all">
                   <div onClick={() => setActiveIdx(open ? null : idx)} className="flex items-center justify-between p-4 cursor-pointer hover:bg-bg-card/50 select-none text-xs">
                     <div className="flex items-center space-x-3.5 min-w-0 flex-1">
-                      {isVarc ? <BookOpen className="w-4.5 h-4.5 text-brand-gold flex-shrink-0" /> : <Calculator className="w-4.5 h-4.5 text-brand-green flex-shrink-0" />}
+                      {isVarc ? <BookOpen className="w-4.5 h-4.5 text-brand-gold flex-shrink-0" /> : isLrdi ? <FileText className="w-4.5 h-4.5 text-brand-blue flex-shrink-0" /> : <Calculator className="w-4.5 h-4.5 text-brand-green flex-shrink-0" />}
                       <div className="truncate font-semibold text-text-main font-mono">
                         <span className="font-serif italic font-normal text-text-muted select-none"><QuestionPreviewText question={q} /></span>
                       </div>
                     </div>
                     <div className="flex items-center space-x-4 flex-shrink-0">
+                      <span className="text-[10px] text-brand-gold font-mono font-semibold uppercase tracking-wider px-2 py-0.5 bg-brand-gold/10 border border-brand-gold/20 rounded">{b.typeLabel}</span>
                       <span className="text-[10px] text-text-faint font-mono font-semibold uppercase tracking-wider px-2 py-0.5 bg-bg-card border border-border-subtle rounded">{tita ? 'TITA' : 'MCQ'}</span>
                       <span className="text-[10px] text-text-faint font-mono">{date}</span>
                       <button onClick={(e) => handleRemove(e, b.id)} className="p-1 text-text-faint hover:text-brand-red transition" title="Delete Bookmark">
@@ -102,6 +136,15 @@ export default function Bookmarks({ onStartPractice }) {
                             <h4 className="text-xs uppercase font-mono font-bold tracking-wider text-brand-gold">{b.passageTitle || 'Associated Reading Passage'}</h4>
                           </div>
                           <div className="text-xs md:text-sm font-serif leading-relaxed text-text-muted max-h-52 overflow-y-auto custom-scrollbar whitespace-pre-wrap select-text pr-2">{b.passageText}</div>
+                        </div>
+                      )}
+                      {!b.passageText && q.passage && (
+                        <div className="mb-6 max-h-80 overflow-y-auto rounded-xl border border-border-subtle bg-bg-surface p-5 custom-scrollbar">
+                          <div className="flex items-center space-x-1.5 mb-2.5">
+                            <FileText className="w-4 h-4 text-brand-gold" />
+                            <h4 className="text-xs uppercase font-mono font-bold tracking-wider text-brand-gold">{q.passage.source_label || q.passage.title || 'Associated Context'}</h4>
+                          </div>
+                          <PassageDisplay passage={q.passage} />
                         </div>
                       )}
                       {displayInstruction(q) && <h2 className="text-xs font-normal italic text-text-muted bg-bg-surface border-l-2 border-brand-gold/60 px-4 py-2.5 rounded-r-lg mb-4">{displayInstruction(q)}</h2>}

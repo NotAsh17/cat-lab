@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { Bookmark, CheckCircle, ChevronLeft, ChevronRight, Copy, HelpCircle, Pause, Play, Type, XCircle } from 'lucide-react';
 import { Storage } from '../services/storage';
-import { answerOutcome, displayInstruction, isQaQuestion, isTitaQuestion, questionType } from '../services/questionUtils';
+import { answerOutcome, displayInstruction, isTitaQuestion, questionSection, questionType } from '../services/questionUtils';
 import { optionDisplayKey, shouldStripOptionKeys } from '../services/optionRenderUtils';
 import { OptionContent, PassageDisplay, QuestionStem } from './QuestionDisplay';
 import { seededRng, shuffleStable } from '../services/paperGenerator';
@@ -258,7 +258,7 @@ export default function TestRunner({
     } else {
       Storage.saveBookmark(
         activeQuestion,
-        isQaQuestion(activeQuestion) ? 'qa' : 'varc',
+        questionSection(activeQuestion),
         activePassage?.source_label || activePassage?.title || activePassage?.id,
         activePassage?.paragraphs?.join('\n\n') || activePassage?.passage || '',
       );
