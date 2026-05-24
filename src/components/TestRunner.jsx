@@ -284,7 +284,7 @@ export default function TestRunner({
   const unansweredCount = Math.max(0, questions.length - answeredCount);
 
   return (
-    <div className="flex flex-col h-screen w-full select-none bg-bg-base text-text-main">
+    <div className="flex min-h-screen w-full select-none flex-col bg-bg-base text-text-main lg:h-screen">
       {isPaused && (
         <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-bg-base/80 backdrop-blur-md animate-fadeIn">
           <div className="bg-bg-surface border border-border-subtle p-8 rounded-2xl max-w-sm text-center shadow-[0_4px_30px_rgba(0,0,0,0.4)]">
@@ -298,8 +298,8 @@ export default function TestRunner({
         </div>
       )}
 
-      <header className="h-14 border-b border-border-subtle bg-bg-surface flex items-center justify-between px-6 z-10 flex-shrink-0">
-        <div className="flex items-center space-x-4 min-w-0">
+      <header className="z-10 flex min-h-14 flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border-subtle bg-bg-surface px-3 py-2 md:px-6">
+        <div className="flex min-w-0 items-center space-x-2 md:space-x-4">
           <button onClick={onExit} className="text-xs text-text-muted hover:text-text-main font-semibold font-mono flex items-center space-x-1 border border-border-subtle px-2.5 py-1 rounded-md bg-bg-card hover:bg-bg-surface transition">
             <ChevronLeft className="w-3.5 h-3.5" />
             <span>Exit Practice</span>
@@ -326,11 +326,11 @@ export default function TestRunner({
         )}
       </header>
 
-      <div className="flex-1 flex overflow-hidden min-h-0">
-        <div className="flex-grow flex overflow-hidden min-w-0">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        <div className="flex min-w-0 flex-grow flex-col overflow-visible lg:flex-row lg:overflow-hidden">
           {activePassage ? (
-            <div className="flex-1 flex overflow-hidden">
-              <div className="w-1/2 border-r border-border-subtle flex flex-col bg-bg-surface overflow-hidden">
+            <div className="flex flex-1 flex-col overflow-visible lg:flex-row lg:overflow-hidden">
+              <div className="flex max-h-[45vh] w-full flex-col overflow-hidden border-b border-border-subtle bg-bg-surface lg:max-h-none lg:w-1/2 lg:border-b-0 lg:border-r">
                 <div className="h-10 border-b border-border-subtle px-4 flex items-center justify-between text-xs text-text-muted flex-shrink-0">
                   <span className="font-semibold font-serif italic text-text-main">Reading Passage</span>
                   <div className="flex items-center space-x-1 bg-bg-card border border-border-subtle rounded px-1.5 py-0.5">
@@ -349,17 +349,17 @@ export default function TestRunner({
                   <PassageDisplay passage={activePassage} fontSize={varcFontSize} />
                 </div>
               </div>
-              <div className="w-[35%] flex flex-col overflow-y-auto bg-bg-base border-r border-border-subtle">{renderQuestionWorkspace()}</div>
+              <div className="flex w-full flex-col overflow-y-auto border-b border-border-subtle bg-bg-base lg:w-[35%] lg:border-b-0 lg:border-r">{renderQuestionWorkspace()}</div>
             </div>
           ) : (
-            <div className="w-[80%] flex flex-col bg-bg-base overflow-y-auto border-r border-border-subtle">{renderQuestionWorkspace()}</div>
+            <div className="flex w-full flex-col overflow-y-auto border-b border-border-subtle bg-bg-base lg:w-[80%] lg:border-b-0 lg:border-r">{renderQuestionWorkspace()}</div>
           )}
         </div>
 
-        <aside className={`${activePassage ? 'w-[15%]' : 'w-[20%]'} flex-shrink-0 bg-bg-surface flex flex-col justify-between overflow-y-auto`}>
+        <aside className={`${activePassage ? 'lg:w-[15%]' : 'lg:w-[20%]'} flex w-full flex-shrink-0 flex-col justify-between bg-bg-surface lg:overflow-y-auto`}>
           <div className="p-4">
             <div className="font-bold text-[10px] font-mono uppercase tracking-wider text-text-muted mb-4 border-b border-border-subtle pb-2">Question Palette</div>
-            <div className={`grid ${activePassage ? 'grid-cols-4' : 'grid-cols-5'} gap-1.5 mb-6`}>
+            <div className={`grid ${activePassage ? 'grid-cols-8 sm:grid-cols-10 lg:grid-cols-4' : 'grid-cols-8 sm:grid-cols-10 lg:grid-cols-5'} gap-1.5 mb-6`}>
               {questions.map((q, idx) => {
                 const current = idx === currentIdx;
                 const isMarked = marked.has(q.id);
@@ -387,8 +387,8 @@ export default function TestRunner({
         </aside>
       </div>
 
-      <footer className="h-14 border-t border-border-subtle bg-bg-surface flex items-center justify-between px-6 z-10 flex-shrink-0">
-        <div className="flex space-x-3">
+      <footer className="z-10 flex min-h-14 flex-shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border-subtle bg-bg-surface px-3 py-2 md:px-6">
+        <div className="flex flex-wrap gap-2 md:gap-3">
           <button onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))} disabled={currentIdx === 0} className="px-4 py-2 border border-border-subtle disabled:opacity-30 rounded-lg text-xs font-semibold font-mono hover:text-text-main hover:border-text-muted transition flex items-center space-x-1">
             <ChevronLeft className="w-3.5 h-3.5" />
             <span>Previous</span>
@@ -425,9 +425,9 @@ export default function TestRunner({
 
   function renderQuestionWorkspace() {
     return (
-      <div className="p-6 md:p-8 flex flex-col flex-grow justify-between min-h-0 select-text font-sans">
+      <div className="flex min-h-0 flex-grow flex-col justify-between p-4 font-sans select-text md:p-8">
         <div>
-          <div className="flex items-center justify-between border-b border-border-subtle/50 pb-4 mb-6">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle/50 pb-4">
             <div className="flex items-center space-x-3">
               <span className="text-base md:text-lg font-bold font-mono text-text-main">Question {currentIdx + 1}</span>
               <span className={`text-[9px] font-mono font-bold uppercase tracking-wider px-2 py-0.5 rounded ${tita ? 'bg-brand-green/10 text-brand-green border border-brand-green/20' : 'bg-brand-blue/10 text-brand-blue border border-brand-blue/20'}`}>

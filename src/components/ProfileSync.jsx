@@ -18,10 +18,10 @@ function mergeById(localRows, cloudRows) {
   return Array.from(map.values());
 }
 
-export default function ProfileSync({ theme, setTheme, profile, setProfile, onDataChanged }) {
+export default function ProfileSync({ theme, setTheme, username, setUsername, onDataChanged }) {
   const [session, setSession] = useState(null);
   const [email, setEmail] = useState('');
-  const [displayName, setDisplayName] = useState(profile || 'User');
+  const [displayName, setDisplayName] = useState(username || Storage.getPendingUsername() || '');
   const [status, setStatus] = useState('');
   const [busy, setBusy] = useState(false);
   const [counts, setCounts] = useState(() => ({
@@ -31,10 +31,10 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
 
   const userEmail = session?.user?.email;
   const protocol = useMemo(() => [
-    'Shared papers use only seed + bank version. Profile history never changes daily or weekly paper generation.',
-    'After sign-in, the app pulls cloud state, merges local state, then pushes missing local rows automatically.',
-    'Submitted attempts are append-only. Bookmarks, completed dailies, and settings use last-write-wins.',
-    'Every accepted cloud row belongs to auth.uid() through Supabase RLS.',
+    'Every signed-in account gets its own local storage namespace keyed by Supabase user id.',
+    'Daily completion, streaks, attempts, and bookmarks no longer share browser-global progress keys.',
+    'After sign-in, the app pulls cloud state, merges local account state, then pushes missing rows.',
+    'Shared daily and weekly papers still use only seed + bank version. Username/history never changes the generated paper.',
     'Local mode remains usable without login. Cloud sync starts only after sign-in.',
   ], []);
 
@@ -48,17 +48,30 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
   useEffect(() => {
     if (!CloudSync.isConfigured) return undefined;
     CloudSync.getSession()
-      .then((nextSession) => {
+      .then(async (nextSession) => {
         setSession(nextSession);
         if (nextSession?.user?.email) setEmail(nextSession.user.email);
+        if (nextSession?.user?.id) {
+          Storage.setAccountScope(nextSession.user.id, { migrateFromLocal: true });
+          const profile = await CloudSync.loadProfile().catch(() => null);
+          const nextName = profile?.display_name || Storage.getUsername() || nextSession.user.email?.split('@')[0] || '';
+          setDisplayName(nextName);
+          if (nextName) setUsername(nextName);
+          refreshLocalCounts();
+        }
       })
       .catch((error) => setStatus(error.message));
     const sub = CloudSync.onAuthStateChange((nextSession) => {
       setSession(nextSession);
       if (nextSession?.user?.email) setEmail(nextSession.user.email);
+      if (!nextSession?.user) {
+        Storage.setAccountScope('local');
+        setUsername(Storage.getUsername());
+        refreshLocalCounts();
+      }
     });
     return () => sub?.unsubscribe?.();
-  }, []);
+  }, [setUsername]);
 
   const run = async (label, fn) => {
     setBusy(true);
@@ -76,24 +89,34 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
     }
   };
 
+  const normalizedName = () => displayName.trim();
+
   const signIn = () => run('Sending magic link', async () => {
+    Storage.setPendingUsername(normalizedName());
     await CloudSync.signInWithEmail(email.trim());
     setStatus('Magic link sent. Open it on this device to finish login.');
   });
 
   const signOut = () => run('Signing out', async () => {
     await CloudSync.signOut();
+    Storage.setAccountScope('local');
+    setUsername(Storage.getUsername());
     setSession(null);
+    refreshLocalCounts();
   });
 
-  const saveProfileSettings = () => run('Saving settings', async () => {
-    await CloudSync.ensureProfile(displayName || userEmail || 'CAT User');
-    await CloudSync.updateSettings({ theme, activeLocalProfile: profile, extra: { displayName } });
+  const saveAccountSettings = () => run('Saving account', async () => {
+    const nextName = normalizedName() || userEmail?.split('@')[0] || 'CAT User';
+    await CloudSync.ensureProfile(nextName);
+    await CloudSync.updateSettings({ theme, extra: { displayName: nextName } });
+    Storage.setUsername(nextName);
+    setUsername(nextName);
   });
 
   const pushLocal = () => run('Pushing local state', async () => {
-    await CloudSync.ensureProfile(displayName || userEmail || 'CAT User');
-    await CloudSync.updateSettings({ theme, activeLocalProfile: profile, extra: { displayName } });
+    const nextName = normalizedName() || userEmail?.split('@')[0] || 'CAT User';
+    await CloudSync.ensureProfile(nextName);
+    await CloudSync.updateSettings({ theme, extra: { displayName: nextName } });
     const bankVersion = Storage.getBankVersion();
     for (const bookmark of Storage.getBookmarks()) {
       await CloudSync.saveBookmark(bookmark, bankVersion);
@@ -107,30 +130,38 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
   });
 
   const pullCloud = () => run('Pulling cloud state', async () => {
-    await CloudSync.ensureProfile(displayName || userEmail || 'CAT User');
-    const [settings, bookmarks, attempts, completedDays] = await Promise.all([
+    const nextName = normalizedName() || userEmail?.split('@')[0] || 'CAT User';
+    await CloudSync.ensureProfile(nextName);
+    const [profile, settings, bookmarks, attempts, completedDays] = await Promise.all([
+      CloudSync.loadProfile(),
       CloudSync.loadSettings(),
       CloudSync.loadBookmarks(),
       CloudSync.loadAttempts(),
       CloudSync.loadCompletedDays(),
     ]);
     if (settings?.theme) setTheme(settings.theme);
-    if (settings?.active_local_profile) setProfile(settings.active_local_profile);
+    const cloudName = profile?.display_name || settings?.settings?.displayName || nextName;
+    setDisplayName(cloudName);
+    setUsername(cloudName);
     Storage.setBookmarks(mergeById(Storage.getBookmarks(), bookmarks));
     Storage.setHistory(mergeById(Storage.getHistory(), attempts));
     Storage.applyCompletedDayRows(completedDays);
   });
 
   const syncNow = () => run('Syncing account state', async () => {
-    await CloudSync.ensureProfile(displayName || userEmail || 'CAT User');
-    const [settings, bookmarks, attempts, completedDays] = await Promise.all([
+    const nextName = normalizedName() || userEmail?.split('@')[0] || 'CAT User';
+    await CloudSync.ensureProfile(nextName);
+    const [profile, settings, bookmarks, attempts, completedDays] = await Promise.all([
+      CloudSync.loadProfile(),
       CloudSync.loadSettings(),
       CloudSync.loadBookmarks(),
       CloudSync.loadAttempts(),
       CloudSync.loadCompletedDays(),
     ]);
     if (settings?.theme) setTheme(settings.theme);
-    if (settings?.active_local_profile) setProfile(settings.active_local_profile);
+    const cloudName = profile?.display_name || settings?.settings?.displayName || nextName;
+    setDisplayName(cloudName);
+    setUsername(cloudName);
     Storage.setBookmarks(mergeById(Storage.getBookmarks(), bookmarks));
     Storage.setHistory(mergeById(Storage.getHistory(), attempts));
     Storage.applyCompletedDayRows([...Storage.getCompletedDayRows(), ...completedDays]);
@@ -138,11 +169,11 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
     for (const bookmark of Storage.getBookmarks()) await CloudSync.saveBookmark(bookmark, bankVersion);
     for (const attempt of Storage.getHistory()) await CloudSync.saveAttempt(attempt, bankVersion);
     for (const day of Storage.getCompletedDayRows()) await CloudSync.saveCompletedDay(day);
-    await CloudSync.updateSettings({ theme, activeLocalProfile: profile, extra: { displayName } });
+    await CloudSync.updateSettings({ theme, extra: { displayName: cloudName } });
   });
 
   const clearLocal = (scope) => {
-    if (!window.confirm(`Clear local ${scope} data on this browser?`)) return;
+    if (!window.confirm(`Clear local ${scope} data on this browser for the current account?`)) return;
     Storage.clearLocal(scope);
     refreshLocalCounts();
     onDataChanged?.();
@@ -155,12 +186,12 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
   };
 
   return (
-    <div className="mx-auto max-w-5xl animate-fadeIn px-6 py-8 pb-16 font-sans">
+    <div className="mx-auto max-w-5xl animate-fadeIn px-4 py-6 pb-16 font-sans sm:px-6 lg:py-8">
       <div className="mb-8 border-b border-border-subtle pb-4">
         <span className="font-mono text-xs font-semibold uppercase tracking-wider text-brand-gold">Account & Sync</span>
-        <h2 className="mt-1 font-serif text-3xl font-bold tracking-tight text-text-main">Profile & Cloud Sync</h2>
+        <h2 className="mt-1 font-serif text-2xl font-bold tracking-tight text-text-main sm:text-3xl">Account Cloud Sync</h2>
         <p className="mt-2 max-w-2xl text-sm leading-relaxed text-text-muted">
-          Sign in once, then bookmarks, attempts, completed dailies, and recent sessions sync behind your account.
+          Choose a username for this account. Bookmarks, attempts, completed dailies, and recent sessions sync behind the signed-in user.
         </p>
       </div>
 
@@ -190,18 +221,31 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
 
           {!userEmail ? (
             <div className="space-y-3">
-              <input
-                type="email"
-                value={email}
-                onChange={(e) => setEmail(e.target.value)}
-                placeholder="you@example.com"
-                disabled={!isSupabaseConfigured || busy}
-                className="w-full rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm text-text-main outline-none focus:border-brand-gold"
-              />
+              <label className="block">
+                <span className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-faint">Username</span>
+                <input
+                  value={displayName}
+                  onChange={(e) => setDisplayName(e.target.value)}
+                  placeholder="Ash"
+                  disabled={!isSupabaseConfigured || busy}
+                  className="w-full rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm text-text-main outline-none focus:border-brand-gold"
+                />
+              </label>
+              <label className="block">
+                <span className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-faint">Email</span>
+                <input
+                  type="email"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="you@example.com"
+                  disabled={!isSupabaseConfigured || busy}
+                  className="w-full rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm text-text-main outline-none focus:border-brand-gold"
+                />
+              </label>
               <button
                 type="button"
                 onClick={signIn}
-                disabled={!isSupabaseConfigured || busy || !email.trim()}
+                disabled={!isSupabaseConfigured || busy || !email.trim() || !normalizedName()}
                 className="inline-flex items-center gap-2 rounded-xl bg-brand-gold px-4 py-2.5 font-mono text-xs font-bold text-bg-base transition hover:bg-brand-gold-hover disabled:cursor-not-allowed disabled:opacity-40"
               >
                 <UserRound className="h-3.5 w-3.5" />
@@ -211,7 +255,7 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
           ) : (
             <div className="space-y-4">
               <label className="block">
-                <span className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-faint">Display name</span>
+                <span className="mb-1 block font-mono text-[10px] uppercase tracking-widest text-text-faint">Username</span>
                 <input
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
@@ -219,9 +263,9 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
                 />
               </label>
               <div className="flex flex-wrap gap-2">
-                <button onClick={saveProfileSettings} disabled={busy} className="inline-flex items-center gap-2 rounded-xl bg-brand-gold px-4 py-2.5 font-mono text-xs font-bold text-bg-base hover:bg-brand-gold-hover disabled:opacity-40">
+                <button onClick={saveAccountSettings} disabled={busy || !normalizedName()} className="inline-flex items-center gap-2 rounded-xl bg-brand-gold px-4 py-2.5 font-mono text-xs font-bold text-bg-base hover:bg-brand-gold-hover disabled:opacity-40">
                   <Save className="h-3.5 w-3.5" />
-                  Save Settings
+                  Save Username
                 </button>
                 <button onClick={signOut} disabled={busy} className="inline-flex items-center gap-2 rounded-xl border border-border-subtle px-4 py-2.5 font-mono text-xs font-bold text-text-muted hover:text-text-main disabled:opacity-40">
                   <LogOut className="h-3.5 w-3.5" />
@@ -239,15 +283,15 @@ export default function ProfileSync({ theme, setTheme, profile, setProfile, onDa
         <section className="rounded-xl border border-border-subtle bg-bg-surface p-6">
           <h3 className="font-serif text-xl font-bold text-text-main">Sync Actions</h3>
           <p className="mt-1 text-xs leading-relaxed text-text-muted">
-            Local now has {counts.history} attempts and {counts.bookmarks} bookmarks.
+            This account namespace has {counts.history} attempts and {counts.bookmarks} bookmarks on this browser.
           </p>
           <div className="mt-5 grid grid-cols-1 gap-3">
             <button onClick={pushLocal} disabled={!userEmail || busy} className="flex items-center justify-between rounded-xl border border-border-subtle bg-bg-card px-4 py-3 text-left transition hover:border-brand-gold/40 disabled:opacity-40">
-              <span><b className="block text-sm text-text-main">Push local to cloud</b><span className="text-xs text-text-muted">Upload this browser's bookmarks and attempts.</span></span>
+              <span><b className="block text-sm text-text-main">Push local to cloud</b><span className="text-xs text-text-muted">Upload this account namespace's bookmarks and attempts.</span></span>
               <Upload className="h-4 w-4 text-brand-gold" />
             </button>
             <button onClick={pullCloud} disabled={!userEmail || busy} className="flex items-center justify-between rounded-xl border border-border-subtle bg-bg-card px-4 py-3 text-left transition hover:border-brand-gold/40 disabled:opacity-40">
-              <span><b className="block text-sm text-text-main">Pull cloud to local</b><span className="text-xs text-text-muted">Merge cloud bookmarks and attempts into this browser.</span></span>
+              <span><b className="block text-sm text-text-main">Pull cloud to local</b><span className="text-xs text-text-muted">Merge cloud rows into this account namespace.</span></span>
               <Download className="h-4 w-4 text-brand-gold" />
             </button>
             <button onClick={syncNow} disabled={!userEmail || busy} className="flex items-center justify-between rounded-xl border border-border-subtle bg-bg-card px-4 py-3 text-left transition hover:border-brand-gold/40 disabled:opacity-40">

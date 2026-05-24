@@ -34,7 +34,7 @@ export default function App() {
   const [currentView, setView] = useState('dashboard');
   const [theme, setTheme] = useState(Storage.getTheme());
   const [streak, setStreak] = useState(Storage.getStreak());
-  const [profile, setProfile] = useState(Storage.getActiveProfile());
+  const [username, setUsername] = useState(Storage.getUsername());
   const [db, setDb] = useState(null);
   const [dbError, setDbError] = useState('');
   const [activeTestConfig, setActiveTestConfig] = useState(null);
@@ -103,8 +103,11 @@ export default function App() {
         return;
       }
 
-      await CloudSync.ensureProfile(profile || session.user.email || 'CAT User');
-      const [settings, cloudBookmarks, cloudAttempts, cloudDays] = await Promise.all([
+      Storage.setAccountScope(session.user.id, { migrateFromLocal: true });
+      const preferredName = Storage.consumePendingUsername() || Storage.getUsername() || session.user.email?.split('@')[0] || 'CAT User';
+      await CloudSync.ensureProfile(preferredName);
+      const [profileRow, settings, cloudBookmarks, cloudAttempts, cloudDays] = await Promise.all([
+        CloudSync.loadProfile(),
         CloudSync.loadSettings(),
         CloudSync.loadBookmarks(),
         CloudSync.loadAttempts(),
@@ -112,9 +115,10 @@ export default function App() {
       ]);
 
       if (settings?.theme && settings.theme !== theme) setTheme(settings.theme);
-      if (settings?.active_local_profile && settings.active_local_profile !== profile) {
-        setProfile(settings.active_local_profile);
-        Storage.setActiveProfile(settings.active_local_profile);
+      const cloudUsername = profileRow?.display_name || settings?.settings?.displayName || preferredName;
+      if (cloudUsername) {
+        setUsername(cloudUsername);
+        Storage.setUsername(cloudUsername);
       }
 
       const mergedBookmarks = mergeByIdPreferNewest(Storage.getBookmarks(), cloudBookmarks, 'bookmarkedAt');
@@ -135,7 +139,7 @@ export default function App() {
       for (const day of Storage.getCompletedDayRows()) {
         await CloudSync.saveCompletedDay(day);
       }
-      await CloudSync.updateSettings({ theme: settings?.theme || theme, activeLocalProfile: settings?.active_local_profile || profile, extra: { displayName: profile } });
+      await CloudSync.updateSettings({ theme: settings?.theme || theme, extra: { displayName: cloudUsername || preferredName } });
 
       Storage.setLastSync();
       updateStatsAndHistory();
@@ -146,7 +150,7 @@ export default function App() {
     } finally {
       syncBusyRef.current = false;
     }
-  }, [db, profile, theme]);
+  }, [db, theme]);
 
   useEffect(() => {
     if (!db || !CloudSync.isConfigured) return undefined;
@@ -156,7 +160,12 @@ export default function App() {
     }
     const sub = CloudSync.onAuthStateChange((session) => {
       if (session?.user) syncAccountState('signin');
-      else setSyncStatus({ state: 'local', label: 'Local only' });
+      else {
+        Storage.setAccountScope('local');
+        setUsername(Storage.getUsername());
+        updateStatsAndHistory();
+        setSyncStatus({ state: 'local', label: 'Local only' });
+      }
     });
     return () => sub?.unsubscribe?.();
   }, [db, syncAccountState]);
@@ -215,9 +224,9 @@ export default function App() {
     Storage.setTheme(nextTheme);
   };
 
-  const handleProfileChange = (newProfile) => {
-    setProfile(newProfile);
-    Storage.setActiveProfile(newProfile);
+  const handleUsernameChange = (newUsername) => {
+    setUsername(newUsername);
+    Storage.setUsername(newUsername);
     updateStatsAndHistory();
   };
 
@@ -371,7 +380,7 @@ export default function App() {
       case 'analytics':
         return <Analytics stats={stats} history={history} />;
       case 'profile_sync':
-        return <ProfileSync theme={theme} setTheme={setTheme} profile={profile} setProfile={handleProfileChange} onDataChanged={updateStatsAndHistory} />;
+        return <ProfileSync theme={theme} setTheme={setTheme} username={username} setUsername={handleUsernameChange} onDataChanged={updateStatsAndHistory} />;
       case 'test_runner_varc':
       case 'test_runner_qa':
       case 'test_runner_daily':
@@ -406,7 +415,7 @@ export default function App() {
   const isTestRunnerActive = currentView.startsWith('test_runner');
 
   return (
-    <div className="flex min-h-screen bg-bg-base text-text-main font-sans selection:bg-brand-gold/30">
+    <div className="flex min-h-screen flex-col bg-bg-base text-text-main font-sans selection:bg-brand-gold/30 md:flex-row">
       {!isTestRunnerActive && (
         <Sidebar
           currentView={currentView}
@@ -414,12 +423,11 @@ export default function App() {
           theme={theme}
           toggleTheme={toggleTheme}
           streak={streak}
-          profile={profile}
-          setProfile={handleProfileChange}
+          username={username}
           syncStatus={syncStatus}
         />
       )}
-      <div className="flex-grow min-w-0 overflow-y-auto">{renderMainView()}</div>
+      <div className="min-w-0 flex-grow overflow-y-auto">{renderMainView()}</div>
     </div>
   );
 }

@@ -400,9 +400,9 @@ export default function FullMockRunner({ paper, onFinishTest, onExit }) {
   const activeInstruction = displayInstruction(activeQuestion, currentIdx);
 
   return (
-    <div className="flex h-screen w-full select-none flex-col bg-bg-base text-text-main">
-      <header className="z-10 flex h-14 flex-shrink-0 items-center justify-between border-b border-border-subtle bg-bg-surface px-6">
-        <div className="flex min-w-0 items-center space-x-4">
+    <div className="flex min-h-screen w-full select-none flex-col bg-bg-base text-text-main lg:h-screen">
+      <header className="z-10 flex min-h-14 flex-shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border-subtle bg-bg-surface px-3 py-2 md:px-6">
+        <div className="flex min-w-0 items-center space-x-2 md:space-x-4">
           <button onClick={onExit} className="flex items-center space-x-1 rounded-md border border-border-subtle bg-bg-card px-2.5 py-1 text-xs font-semibold font-mono text-text-muted transition hover:bg-bg-surface hover:text-text-main">
             <ChevronLeft className="h-3.5 w-3.5" />
             <span>Exit Mock</span>
@@ -419,11 +419,11 @@ export default function FullMockRunner({ paper, onFinishTest, onExit }) {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
-        <div className="flex min-w-0 flex-grow overflow-hidden">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto lg:flex-row lg:overflow-hidden">
+        <div className="flex min-w-0 flex-grow flex-col overflow-visible lg:flex-row lg:overflow-hidden">
           {activePassage ? (
-            <div className="flex flex-1 overflow-hidden">
-              <div className="flex w-1/2 flex-col overflow-hidden border-r border-border-subtle bg-bg-surface">
+            <div className="flex flex-1 flex-col overflow-visible lg:flex-row lg:overflow-hidden">
+              <div className="flex max-h-[45vh] w-full flex-col overflow-hidden border-b border-border-subtle bg-bg-surface lg:max-h-none lg:w-1/2 lg:border-b-0 lg:border-r">
                 <div className="flex h-10 flex-shrink-0 items-center justify-between border-b border-border-subtle px-4 text-xs text-text-muted">
                   <span className="font-serif font-semibold italic text-text-main">{activeSection.id === 'lrdi' ? 'Data Set' : 'Reading Passage'}</span>
                   {activeSection.id === 'varc' && (
@@ -444,17 +444,17 @@ export default function FullMockRunner({ paper, onFinishTest, onExit }) {
                   <PassageDisplay passage={activePassage} fontSize={varcFontSize} />
                 </div>
               </div>
-              <div className="flex w-[35%] flex-col overflow-y-auto border-r border-border-subtle bg-bg-base">{renderQuestionWorkspace()}</div>
+              <div className="flex w-full flex-col overflow-y-auto border-b border-border-subtle bg-bg-base lg:w-[35%] lg:border-b-0 lg:border-r">{renderQuestionWorkspace()}</div>
             </div>
           ) : (
-            <div className="flex w-[80%] flex-col overflow-y-auto border-r border-border-subtle bg-bg-base">{renderQuestionWorkspace()}</div>
+            <div className="flex w-full flex-col overflow-y-auto border-b border-border-subtle bg-bg-base lg:w-[80%] lg:border-b-0 lg:border-r">{renderQuestionWorkspace()}</div>
           )}
         </div>
 
-        <aside className={`${activePassage ? 'w-[15%]' : 'w-[20%]'} flex-shrink-0 overflow-y-auto bg-bg-surface`}>
+        <aside className={`${activePassage ? 'lg:w-[15%]' : 'lg:w-[20%]'} w-full flex-shrink-0 bg-bg-surface lg:overflow-y-auto`}>
           <div className="p-4">
             <div className="mb-4 border-b border-border-subtle pb-2 text-[10px] font-bold font-mono uppercase tracking-wider text-text-muted">Question Palette</div>
-            <div className={`mb-6 grid ${activePassage ? 'grid-cols-4' : 'grid-cols-5'} gap-1.5`}>
+            <div className={`mb-6 grid ${activePassage ? 'grid-cols-8 sm:grid-cols-10 lg:grid-cols-4' : 'grid-cols-8 sm:grid-cols-10 lg:grid-cols-5'} gap-1.5`}>
               {questions.map((q, idx) => {
                 const current = idx === currentIdx;
                 const isMarked = marked.has(q.id);
@@ -484,8 +484,8 @@ export default function FullMockRunner({ paper, onFinishTest, onExit }) {
         </aside>
       </div>
 
-      <footer className="z-10 flex h-14 flex-shrink-0 items-center justify-between border-t border-border-subtle bg-bg-surface px-6">
-        <div className="flex space-x-3">
+      <footer className="z-10 flex min-h-14 flex-shrink-0 flex-wrap items-center justify-between gap-2 border-t border-border-subtle bg-bg-surface px-3 py-2 md:px-6">
+        <div className="flex flex-wrap gap-2 md:gap-3">
           <button onClick={() => setCurrentIdx((prev) => Math.max(0, prev - 1))} disabled={currentIdx === 0} className="flex items-center space-x-1 rounded-lg border border-border-subtle px-4 py-2 text-xs font-semibold font-mono transition hover:border-text-muted hover:text-text-main disabled:opacity-30">
             <ChevronLeft className="h-3.5 w-3.5" />
             <span>Previous</span>
@@ -524,9 +524,9 @@ export default function FullMockRunner({ paper, onFinishTest, onExit }) {
 
   function renderQuestionWorkspace() {
     return (
-      <div className="flex min-h-0 flex-grow flex-col justify-between p-6 font-sans select-text md:p-8">
+      <div className="flex min-h-0 flex-grow flex-col justify-between p-4 font-sans select-text md:p-8">
         <div>
-          <div className="mb-6 flex items-center justify-between border-b border-border-subtle/50 pb-4">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 border-b border-border-subtle/50 pb-4">
             <div className="flex items-center space-x-3">
               <span className="font-mono text-base font-bold text-text-main md:text-lg">Question {currentIdx + 1}</span>
               <span className={`rounded border px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider ${tita ? 'border-brand-green/20 bg-brand-green/10 text-brand-green' : 'border-brand-blue/20 bg-brand-blue/10 text-brand-blue'}`}>

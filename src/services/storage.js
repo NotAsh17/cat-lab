@@ -2,6 +2,9 @@ import { questionSection, questionType, questionTypeGroup, questionTypeLabel, so
 
 const KEYS = {
   THEME: 'cat_theme',
+  ACCOUNT_SCOPE: 'cat_account_scope',
+  USERNAME: 'cat_username',
+  PENDING_USERNAME: 'cat_pending_username',
   PROFILE: 'cat_active_profile',
   PROFILES: 'cat_profiles',
   HISTORY: 'cat_history',
@@ -12,8 +15,19 @@ const KEYS = {
   LAST_SYNC: 'cat_last_sync',
 };
 
+const DAILY_DONE_KEY = 'cat_daily_done';
+const USER_SCOPED_KEYS = new Set([
+  KEYS.USERNAME,
+  KEYS.HISTORY,
+  KEYS.BOOKMARKS,
+  KEYS.STREAK,
+  KEYS.COMPLETED_DAYS,
+  KEYS.LAST_SYNC,
+]);
+
 let syncAdapter = null;
 let syncStatusListener = null;
+let accountScope = localStorage.getItem(KEYS.ACCOUNT_SCOPE) || 'local';
 
 function safeJsonParse(raw, fallback) {
   if (!raw) return fallback;
@@ -31,12 +45,57 @@ function localDateKey(date = new Date()) {
   return `${y}-${m}-${d}`;
 }
 
+function safeScope(scope) {
+  return String(scope || 'local').replace(/[^a-zA-Z0-9._:-]/g, '_');
+}
+
+function scopedKey(baseKey, scope = accountScope) {
+  if (!USER_SCOPED_KEYS.has(baseKey)) return baseKey;
+  return `${baseKey}:${safeScope(scope)}`;
+}
+
+function dailyDoneKey(scope = accountScope) {
+  return `${DAILY_DONE_KEY}:${safeScope(scope)}`;
+}
+
+function migrateLegacyKey(baseKey, scope = 'local') {
+  const target = scopedKey(baseKey, scope);
+  if (localStorage.getItem(target) === null && localStorage.getItem(baseKey) !== null) {
+    localStorage.setItem(target, localStorage.getItem(baseKey));
+  }
+}
+
+function migrateLegacyDaily(scope = 'local') {
+  const target = dailyDoneKey(scope);
+  if (localStorage.getItem(target) === null && localStorage.getItem(DAILY_DONE_KEY) !== null) {
+    localStorage.setItem(target, localStorage.getItem(DAILY_DONE_KEY));
+  }
+}
+
+function migrateLegacyLocalState() {
+  USER_SCOPED_KEYS.forEach((key) => migrateLegacyKey(key, 'local'));
+  migrateLegacyDaily('local');
+}
+
+function copyScopedLocalState(fromScope, toScope) {
+  USER_SCOPED_KEYS.forEach((key) => {
+    if (key === KEYS.COMPLETED_DAYS || key === KEYS.STREAK) return;
+    const source = scopedKey(key, fromScope);
+    const target = scopedKey(key, toScope);
+    if (localStorage.getItem(target) === null && localStorage.getItem(source) !== null) {
+      localStorage.setItem(target, localStorage.getItem(source));
+    }
+  });
+}
+
 function emitSyncStatus(status) {
   syncStatusListener?.({
     at: new Date().toISOString(),
     ...status,
   });
 }
+
+migrateLegacyLocalState();
 
 export const Storage = {
   setSyncAdapter(adapter) {
@@ -45,6 +104,21 @@ export const Storage = {
 
   setSyncStatusListener(listener) {
     syncStatusListener = listener;
+  },
+
+  getAccountScope() {
+    return accountScope;
+  },
+
+  setAccountScope(scope = 'local', options = {}) {
+    const next = safeScope(scope);
+    const previous = accountScope || 'local';
+    migrateLegacyLocalState();
+    if (options.migrateFromLocal && previous === 'local' && next !== 'local') {
+      copyScopedLocalState('local', next);
+    }
+    accountScope = next;
+    localStorage.setItem(KEYS.ACCOUNT_SCOPE, next);
   },
 
   getBankVersion() {
@@ -56,11 +130,11 @@ export const Storage = {
   },
 
   getLastSync() {
-    return localStorage.getItem(KEYS.LAST_SYNC);
+    return localStorage.getItem(scopedKey(KEYS.LAST_SYNC));
   },
 
   setLastSync(date = new Date()) {
-    localStorage.setItem(KEYS.LAST_SYNC, date.toISOString());
+    localStorage.setItem(scopedKey(KEYS.LAST_SYNC), date.toISOString());
   },
 
   getTheme() {
@@ -72,39 +146,56 @@ export const Storage = {
     document.documentElement.setAttribute('data-theme', theme);
   },
 
+  getUsername() {
+    return localStorage.getItem(scopedKey(KEYS.USERNAME)) || '';
+  },
+
+  setUsername(name) {
+    const normalized = String(name || '').trim();
+    if (normalized) localStorage.setItem(scopedKey(KEYS.USERNAME), normalized);
+    else localStorage.removeItem(scopedKey(KEYS.USERNAME));
+  },
+
+  getPendingUsername() {
+    return localStorage.getItem(KEYS.PENDING_USERNAME) || '';
+  },
+
+  setPendingUsername(name) {
+    const normalized = String(name || '').trim();
+    if (normalized) localStorage.setItem(KEYS.PENDING_USERNAME, normalized);
+    else localStorage.removeItem(KEYS.PENDING_USERNAME);
+  },
+
+  consumePendingUsername() {
+    const value = this.getPendingUsername();
+    localStorage.removeItem(KEYS.PENDING_USERNAME);
+    return value;
+  },
+
   getActiveProfile() {
-    return localStorage.getItem(KEYS.PROFILE) || 'User';
+    return this.getUsername() || 'User';
   },
 
   setActiveProfile(name) {
-    localStorage.setItem(KEYS.PROFILE, name);
+    this.setUsername(name);
   },
 
   getProfiles() {
-    const list = localStorage.getItem(KEYS.PROFILES);
-    if (!list) {
-      const defaults = [{ name: 'User', avatar: 'U' }];
-      localStorage.setItem(KEYS.PROFILES, JSON.stringify(defaults));
-      return defaults;
-    }
-    return safeJsonParse(list, [{ name: 'User', avatar: 'U' }]);
+    const username = this.getUsername() || 'User';
+    return [{ name: username, avatar: username.charAt(0).toUpperCase() }];
   },
 
   addProfile(name) {
-    const profiles = this.getProfiles();
-    if (!profiles.some((p) => p.name.toLowerCase() === name.toLowerCase())) {
-      profiles.push({ name, avatar: name.charAt(0).toUpperCase() });
-      localStorage.setItem(KEYS.PROFILES, JSON.stringify(profiles));
-    }
+    this.setUsername(name);
   },
 
   getBookmarks() {
-    const raw = localStorage.getItem(KEYS.BOOKMARKS);
+    const raw = localStorage.getItem(scopedKey(KEYS.BOOKMARKS));
     return safeJsonParse(raw, []);
   },
 
   setBookmarks(bookmarks) {
-    localStorage.setItem(KEYS.BOOKMARKS, JSON.stringify(bookmarks || []));
+    localStorage.setItem(scopedKey(KEYS.BOOKMARKS), JSON.stringify(bookmarks || []));
   },
 
   saveBookmark(question, section, passageTitle = null, passageText = null) {
@@ -123,14 +214,14 @@ export const Storage = {
         passageText,
         bookmarkedAt: new Date().toISOString(),
       });
-      localStorage.setItem(KEYS.BOOKMARKS, JSON.stringify(bookmarks));
+      localStorage.setItem(scopedKey(KEYS.BOOKMARKS), JSON.stringify(bookmarks));
       this.syncWithSupabase('bookmark_add', bookmarks.find((x) => x.id === question.id));
     }
   },
 
   removeBookmark(questionId) {
     const bookmarks = this.getBookmarks().filter((x) => x.id !== questionId);
-    localStorage.setItem(KEYS.BOOKMARKS, JSON.stringify(bookmarks));
+    localStorage.setItem(scopedKey(KEYS.BOOKMARKS), JSON.stringify(bookmarks));
     this.syncWithSupabase('bookmark_remove', { question_id: questionId });
   },
 
@@ -139,12 +230,12 @@ export const Storage = {
   },
 
   getHistory() {
-    const raw = localStorage.getItem(KEYS.HISTORY);
+    const raw = localStorage.getItem(scopedKey(KEYS.HISTORY));
     return safeJsonParse(raw, []);
   },
 
   setHistory(history) {
-    localStorage.setItem(KEYS.HISTORY, JSON.stringify(history || []));
+    localStorage.setItem(scopedKey(KEYS.HISTORY), JSON.stringify(history || []));
   },
 
   saveAttempt(attempt) {
@@ -155,18 +246,18 @@ export const Storage = {
       completedAt: new Date().toISOString(),
     };
     history.push(savedAttempt);
-    localStorage.setItem(KEYS.HISTORY, JSON.stringify(history));
+    localStorage.setItem(scopedKey(KEYS.HISTORY), JSON.stringify(history));
     this.updateStreak();
     this.syncWithSupabase('attempt_save', savedAttempt);
   },
 
   getCompletedDays() {
-    const raw = localStorage.getItem(KEYS.COMPLETED_DAYS);
+    const raw = localStorage.getItem(scopedKey(KEYS.COMPLETED_DAYS));
     return safeJsonParse(raw, {});
   },
 
   setCompletedDays(days) {
-    localStorage.setItem(KEYS.COMPLETED_DAYS, JSON.stringify(days || {}));
+    localStorage.setItem(scopedKey(KEYS.COMPLETED_DAYS), JSON.stringify(days || {}));
   },
 
   getCompletedDayRows() {
@@ -208,24 +299,24 @@ export const Storage = {
     });
 
     this.setCompletedDays(days);
-    localStorage.setItem('cat_daily_done', JSON.stringify(dailyDone));
+    localStorage.setItem(dailyDoneKey(), JSON.stringify(dailyDone));
   },
 
   completeDay(dayNumber) {
     const days = this.getCompletedDays();
     days[dayNumber] = new Date().toISOString();
-    localStorage.setItem(KEYS.COMPLETED_DAYS, JSON.stringify(days));
+    localStorage.setItem(scopedKey(KEYS.COMPLETED_DAYS), JSON.stringify(days));
     this.updateStreak();
     this.syncWithSupabase('day_complete', { sectionId: String(dayNumber) });
   },
 
   resetDays() {
-    localStorage.removeItem(KEYS.COMPLETED_DAYS);
+    localStorage.removeItem(scopedKey(KEYS.COMPLETED_DAYS));
   },
 
   getDailyDone() {
     const today = localDateKey();
-    const raw = localStorage.getItem('cat_daily_done');
+    const raw = localStorage.getItem(dailyDoneKey());
     if (!raw) return { _date: today };
     try {
       const parsed = JSON.parse(raw);
@@ -238,16 +329,16 @@ export const Storage = {
   setDailyDone(sectionId) {
     const done = this.getDailyDone();
     done[sectionId] = true;
-    localStorage.setItem('cat_daily_done', JSON.stringify(done));
+    localStorage.setItem(dailyDoneKey(), JSON.stringify(done));
     this.syncWithSupabase('day_complete', { sectionId, dayKey: done._date });
   },
 
   clearDailyDone() {
-    localStorage.removeItem('cat_daily_done');
+    localStorage.removeItem(dailyDoneKey());
   },
 
   getStreak() {
-    const raw = localStorage.getItem(KEYS.STREAK);
+    const raw = localStorage.getItem(scopedKey(KEYS.STREAK));
     return safeJsonParse(raw, { current: 0, lastActive: null });
   },
 
@@ -260,22 +351,23 @@ export const Storage = {
     if (streak.lastActive === yesterday.toDateString()) streak.current += 1;
     else streak.current = 1;
     streak.lastActive = today;
-    localStorage.setItem(KEYS.STREAK, JSON.stringify(streak));
+    localStorage.setItem(scopedKey(KEYS.STREAK), JSON.stringify(streak));
   },
 
   clearLocal(scope = 'all') {
-    if (scope === 'all' || scope === 'history') localStorage.removeItem(KEYS.HISTORY);
-    if (scope === 'all' || scope === 'bookmarks') localStorage.removeItem(KEYS.BOOKMARKS);
+    if (scope === 'all' || scope === 'history') localStorage.removeItem(scopedKey(KEYS.HISTORY));
+    if (scope === 'all' || scope === 'bookmarks') localStorage.removeItem(scopedKey(KEYS.BOOKMARKS));
     if (scope === 'all' || scope === 'daily') {
-      localStorage.removeItem(KEYS.COMPLETED_DAYS);
-      localStorage.removeItem('cat_daily_done');
-      localStorage.removeItem(KEYS.STREAK);
+      localStorage.removeItem(scopedKey(KEYS.COMPLETED_DAYS));
+      localStorage.removeItem(dailyDoneKey());
+      localStorage.removeItem(scopedKey(KEYS.STREAK));
     }
     if (scope === 'all' || scope === 'settings') {
       localStorage.removeItem(KEYS.THEME);
+      localStorage.removeItem(scopedKey(KEYS.USERNAME));
+      localStorage.removeItem(scopedKey(KEYS.LAST_SYNC));
       localStorage.removeItem(KEYS.PROFILE);
       localStorage.removeItem(KEYS.PROFILES);
-      localStorage.removeItem(KEYS.LAST_SYNC);
     }
   },
 

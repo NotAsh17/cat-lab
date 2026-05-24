@@ -99,9 +99,10 @@ export const CloudSync = {
 
   async ensureProfile(displayName = 'CAT User') {
     const user = await ensureSignedInUser();
+    const normalizedName = String(displayName || '').trim() || user.email?.split('@')[0] || 'CAT User';
     const { error: profileError } = await supabase
       .from('profiles')
-      .upsert({ user_id: user.id, display_name: displayName || user.email || 'CAT User' }, { onConflict: 'user_id' });
+      .upsert({ user_id: user.id, display_name: normalizedName }, { onConflict: 'user_id' });
     if (profileError) throw profileError;
 
     const { error: settingsError } = await supabase
@@ -111,6 +112,17 @@ export const CloudSync = {
     return user;
   },
 
+  async loadProfile() {
+    const user = await ensureSignedInUser();
+    const { data, error } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('user_id', user.id)
+      .maybeSingle();
+    if (error) throw error;
+    return data;
+  },
+
   async updateSettings(settings = {}) {
     const user = await ensureSignedInUser();
     const { error } = await supabase
@@ -118,7 +130,7 @@ export const CloudSync = {
       .upsert({
         user_id: user.id,
         theme: settings.theme || 'dark',
-        active_local_profile: settings.activeLocalProfile || 'User',
+        active_local_profile: 'account',
         settings: settings.extra || {},
       }, { onConflict: 'user_id' });
     if (error) throw error;

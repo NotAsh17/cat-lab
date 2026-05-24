@@ -126,6 +126,8 @@ body {
 .source-html {
   line-height: 1.65;
   color: inherit;
+  overflow-wrap: anywhere;
+  word-break: normal;
 }
 
 .source-html * {
@@ -141,6 +143,8 @@ body {
 .source-html table {
   border-collapse: collapse;
   width: 100%;
+  display: block;
+  overflow-x: auto;
   margin: 0.75rem 0;
 }
 

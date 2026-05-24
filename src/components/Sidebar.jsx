@@ -8,7 +8,7 @@ import {
   Flame, 
   Sun, 
   Moon, 
-  UserCheck,
+  UserRound,
   Layers,
   Cloud,
   FileText
@@ -21,8 +21,7 @@ export default function Sidebar({
   theme, 
   toggleTheme, 
   streak, 
-  profile, 
-  setProfile,
+  username,
   syncStatus,
 }) {
   const navItems = [
@@ -47,7 +46,7 @@ export default function Sidebar({
     const currentDayIndex = today.getDay(); // 0 is Sunday, 1 is Monday, etc.
     
     return (
-      <div className="mt-6 border-t border-border-subtle pt-4 px-2">
+      <div className="mt-6 hidden border-t border-border-subtle px-2 pt-4 md:block">
         <h4 className="text-xs font-semibold uppercase tracking-wider text-text-muted mb-2 font-mono">
           Weekly Grid
         </h4>
@@ -84,10 +83,10 @@ export default function Sidebar({
   };
 
   return (
-    <aside className="w-64 bg-bg-surface border-r border-border-subtle flex flex-col justify-between h-screen sticky top-0 font-sans select-none">
-      <div className="flex flex-col overflow-y-auto flex-1 py-6 px-4">
+    <aside className="sticky top-0 z-50 flex h-auto w-full flex-col border-b border-border-subtle bg-bg-surface font-sans select-none md:h-screen md:w-64 md:justify-between md:border-b-0 md:border-r">
+      <div className="flex min-w-0 flex-1 items-center gap-3 overflow-x-auto px-3 py-3 md:flex-col md:items-stretch md:gap-0 md:overflow-y-auto md:px-4 md:py-6">
         {/* Brand Header */}
-        <div className="flex items-center space-x-3 px-2 mb-8">
+        <div className="hidden items-center space-x-3 px-2 mb-8 md:flex">
           <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-brand-gold to-brand-gold-hover flex items-center justify-center font-bold text-bg-base font-serif text-lg shadow-[0_0_12px_rgba(201,150,74,0.2)]">
             C
           </div>
@@ -102,7 +101,7 @@ export default function Sidebar({
         </div>
 
         {/* Streak Badge */}
-        <div className="mb-6 px-2">
+        <div className="hidden px-2 md:mb-6 md:block">
           <div className="flex items-center space-x-2.5 px-3 py-2 bg-bg-card border border-border-subtle rounded-lg text-sm">
             <Flame className="w-4 h-4 text-brand-gold animate-pulse" />
             <span className="text-text-main font-medium">
@@ -112,7 +111,7 @@ export default function Sidebar({
         </div>
 
         {/* Navigation Menu */}
-        <nav className="space-y-1">
+        <nav className="flex min-w-0 flex-1 gap-1 md:block md:flex-none md:space-y-1">
           {navItems.map((item) => {
             const Icon = item.icon;
             const isActive = currentView === item.id || 
@@ -126,7 +125,7 @@ export default function Sidebar({
               <button
                 key={item.id}
                 onClick={() => setView(item.id)}
-                className={`w-full flex items-center space-x-3 px-3 py-2.5 rounded-lg text-sm font-medium transition-all ${
+                className={`flex shrink-0 items-center space-x-2 whitespace-nowrap rounded-lg px-3 py-2.5 text-sm font-medium transition-all md:w-full md:space-x-3 ${
                   isActive
                     ? 'bg-brand-gold/10 text-brand-gold border-l-2 border-brand-gold font-semibold'
                     : 'text-text-muted hover:text-text-main hover:bg-bg-card'
@@ -144,7 +143,7 @@ export default function Sidebar({
       </div>
 
       {/* Footer Controls */}
-      <div className="p-4 border-t border-border-subtle bg-bg-card/50 flex flex-col space-y-4">
+      <div className="hidden p-4 border-t border-border-subtle bg-bg-card/50 md:flex md:flex-col md:space-y-4">
         <div className="flex items-center justify-between rounded-lg border border-border-subtle bg-bg-card px-3 py-2 text-xs">
           <div className="flex items-center space-x-2">
             <Cloud className={`h-3.5 w-3.5 ${
@@ -158,20 +157,11 @@ export default function Sidebar({
           {Storage.getLastSync() && <span className="font-mono text-[10px] text-text-faint">cloud</span>}
         </div>
 
-        {/* Profile Selector */}
-        <div className="flex items-center justify-between px-2 text-xs">
-          <div className="flex items-center space-x-2">
-            <UserCheck className="w-3.5 h-3.5 text-text-muted" />
-            <span className="text-text-muted font-mono">Profile:</span>
-            <select 
-              value={profile} 
-              onChange={(e) => setProfile(e.target.value)}
-              className="bg-transparent text-text-main font-semibold font-mono border-none outline-none focus:ring-0 cursor-pointer"
-            >
-              <option value="User" className="bg-bg-surface text-text-main">User</option>
-              <option value="Friend" className="bg-bg-surface text-text-main">Friend</option>
-            </select>
-          </div>
+        {/* Account label */}
+        <div className="flex items-center space-x-2 px-2 text-xs">
+          <UserRound className="w-3.5 h-3.5 text-text-muted" />
+          <span className="text-text-muted font-mono">Account:</span>
+          <span className="truncate text-text-main font-semibold font-mono">{username || 'Local'}</span>
         </div>
 
         {/* Theme Switcher Toggle */}
