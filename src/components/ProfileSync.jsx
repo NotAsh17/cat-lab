@@ -91,8 +91,18 @@ export default function ProfileSync({ theme, setTheme, username, setUsername, on
 
   const normalizedName = () => displayName.trim();
 
+  const saveLocalUsername = () => {
+    const nextName = normalizedName();
+    if (!nextName) return;
+    Storage.setUsername(nextName);
+    Storage.setPendingUsername(nextName);
+    setUsername(nextName);
+    onDataChanged?.();
+    setStatus('Username saved locally.');
+  };
+
   const signIn = () => run('Sending magic link', async () => {
-    Storage.setPendingUsername(normalizedName());
+    saveLocalUsername();
     await CloudSync.signInWithEmail(email.trim());
     setStatus('Magic link sent. Open it on this device to finish login.');
   });
@@ -227,7 +237,7 @@ export default function ProfileSync({ theme, setTheme, username, setUsername, on
                   value={displayName}
                   onChange={(e) => setDisplayName(e.target.value)}
                   placeholder="Ash"
-                  disabled={!isSupabaseConfigured || busy}
+                  disabled={busy}
                   className="w-full rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm text-text-main outline-none focus:border-brand-gold"
                 />
               </label>
@@ -242,15 +252,26 @@ export default function ProfileSync({ theme, setTheme, username, setUsername, on
                   className="w-full rounded-xl border border-border-subtle bg-bg-base px-4 py-3 text-sm text-text-main outline-none focus:border-brand-gold"
                 />
               </label>
-              <button
-                type="button"
-                onClick={signIn}
-                disabled={!isSupabaseConfigured || busy || !email.trim() || !normalizedName()}
-                className="inline-flex items-center gap-2 rounded-xl bg-brand-gold px-4 py-2.5 font-mono text-xs font-bold text-bg-base transition hover:bg-brand-gold-hover disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                <UserRound className="h-3.5 w-3.5" />
-                Send Magic Link
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={saveLocalUsername}
+                  disabled={busy || !normalizedName()}
+                  className="inline-flex items-center gap-2 rounded-xl bg-brand-gold px-4 py-2.5 font-mono text-xs font-bold text-bg-base transition hover:bg-brand-gold-hover disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <Save className="h-3.5 w-3.5" />
+                  Save Username
+                </button>
+                <button
+                  type="button"
+                  onClick={signIn}
+                  disabled={!isSupabaseConfigured || busy || !email.trim() || !normalizedName()}
+                  className="inline-flex items-center gap-2 rounded-xl border border-border-subtle px-4 py-2.5 font-mono text-xs font-bold text-text-muted transition hover:text-text-main disabled:cursor-not-allowed disabled:opacity-40"
+                >
+                  <UserRound className="h-3.5 w-3.5" />
+                  Send Magic Link
+                </button>
+              </div>
             </div>
           ) : (
             <div className="space-y-4">
