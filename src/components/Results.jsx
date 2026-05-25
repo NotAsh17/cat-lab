@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Bookmark, BookmarkCheck, BookOpen, CheckCircle, ChevronLeft, HelpCircle, RotateCcw, XCircle } from 'lucide-react';
 import { Storage } from '../services/storage';
 import { answerOutcome, correctAnswer, displayInstruction, isQaQuestion, isTitaQuestion, questionPreview, sourceLabel } from '../services/questionUtils';
@@ -9,9 +9,23 @@ function formatDuration(secs = 0) {
   return `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`;
 }
 
+function resetResultsScroll() {
+  if (typeof window === 'undefined') return;
+  const appScroller = document.querySelector('[data-app-scroll-root="true"]');
+  appScroller?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  document.documentElement.scrollTop = 0;
+  document.body.scrollTop = 0;
+}
+
 export default function Results({ attempt, onRetake, onBackToDashboard }) {
   const [reviewIdx, setReviewIdx] = useState(null);
   const [, setBookmarksUpdated] = useState(false);
+
+  useEffect(() => {
+    if (attempt) resetResultsScroll();
+  }, [attempt, reviewIdx]);
+
   if (!attempt) return null;
 
   const { testId, score, max, correct, wrong, skipped, timeUsed, answers = {}, questions = [], questionStats = {} } = attempt;
@@ -38,13 +52,13 @@ export default function Results({ attempt, onRetake, onBackToDashboard }) {
   }
 
   return (
-    <div className="mx-auto max-w-4xl animate-fadeIn px-6 py-8 pb-16 font-sans">
-      <div className="mb-8 flex items-center justify-between border-b border-border-subtle pb-4">
+    <div className="mx-auto max-w-4xl animate-fadeIn px-4 py-6 pb-16 font-sans sm:px-6 sm:py-8">
+      <div className="mb-8 flex flex-col items-start justify-between gap-3 border-b border-border-subtle pb-4 sm:flex-row sm:items-center">
         <button onClick={onBackToDashboard} className="flex items-center space-x-1 text-xs font-semibold font-mono text-text-muted hover:text-text-main">
           <ChevronLeft className="h-3.5 w-3.5" />
           <span>Back to Dashboard</span>
         </button>
-        <span className="text-xs font-mono uppercase tracking-wider text-text-faint">Practice ID: {testId}</span>
+        <span className="max-w-full truncate text-xs font-mono uppercase tracking-wider text-text-faint">Practice ID: {testId}</span>
       </div>
 
       <div className="mb-8 flex flex-col items-center justify-between gap-6 rounded-2xl border border-border-subtle bg-bg-surface p-6 md:flex-row md:p-8">
@@ -81,12 +95,12 @@ export default function Results({ attempt, onRetake, onBackToDashboard }) {
               key={q.id}
               type="button"
               onClick={() => setReviewIdx(idx)}
-              className="flex w-full items-center justify-between rounded-xl border border-border-subtle bg-bg-surface p-4 text-left transition hover:border-brand-gold/30 hover:bg-bg-card/50"
+              className="flex w-full items-start justify-between gap-3 rounded-xl border border-border-subtle bg-bg-surface p-4 text-left transition hover:border-brand-gold/30 hover:bg-bg-card/50 sm:items-center"
             >
               <div className="flex min-w-0 flex-1 items-center space-x-3.5">
                 {outcome === 'skipped' ? <HelpCircle className="h-5 w-5 flex-shrink-0 text-text-faint" /> : outcome === 'correct' ? <CheckCircle className="h-5 w-5 flex-shrink-0 text-brand-green" /> : <XCircle className="h-5 w-5 flex-shrink-0 text-brand-red" />}
                 <div className="min-w-0">
-                  <div className="truncate text-xs font-semibold font-mono text-text-main">
+                  <div className="line-clamp-2 text-xs font-semibold font-mono text-text-main sm:truncate">
                     Q{idx + 1}: <span className="font-serif font-normal italic text-text-muted">{questionPreview(q)}</span>
                   </div>
                   <div className="mt-1 text-[10px] font-mono text-text-faint">{sourceLabel(q)} | {formatDuration(stats.timeSec || 0)} | {stats.changes || 0} changes</div>
@@ -114,8 +128,8 @@ function ResultReviewWorkspace({ attempt, reviewIdx, setReviewIdx, onBack, handl
   const bookmarked = Storage.isBookmarked(q.id);
 
   return (
-    <div className="flex h-screen flex-col bg-bg-base text-text-main">
-      <header className="flex h-14 flex-shrink-0 items-center justify-between border-b border-border-subtle bg-bg-surface px-6">
+    <div className="flex min-h-dvh flex-col bg-bg-base text-text-main">
+      <header className="flex min-h-14 flex-shrink-0 flex-col items-start justify-between gap-2 border-b border-border-subtle bg-bg-surface px-3 py-3 sm:flex-row sm:items-center sm:px-6">
         <button onClick={onBack} className="flex items-center space-x-1 rounded-md border border-border-subtle bg-bg-card px-2.5 py-1 text-xs font-semibold font-mono text-text-muted transition hover:text-text-main">
           <ChevronLeft className="h-3.5 w-3.5" />
           <span>Back to summary</span>
@@ -125,20 +139,20 @@ function ResultReviewWorkspace({ attempt, reviewIdx, setReviewIdx, onBack, handl
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 overflow-hidden">
+      <div className="flex flex-1 flex-col overflow-y-auto lg:min-h-0 lg:flex-row lg:overflow-hidden">
         {activePassage && (
-          <section className="flex w-1/2 flex-col overflow-hidden border-r border-border-subtle bg-bg-surface">
+          <section className="flex w-full flex-none flex-col overflow-hidden border-b border-border-subtle bg-bg-surface lg:w-1/2 lg:border-b-0 lg:border-r">
             <div className="h-10 flex-shrink-0 border-b border-border-subtle px-4 py-2 text-xs font-semibold font-serif italic text-text-main">Reading Passage</div>
-            <div className="flex-1 overflow-y-auto bg-bg-base p-8">
+            <div className="max-h-[46vh] overflow-y-auto bg-bg-base p-4 sm:p-6 lg:max-h-none lg:flex-1 lg:p-8">
               <h3 className="mb-6 max-w-2xl border-b border-border-subtle/30 pb-4 font-serif text-lg font-bold italic text-text-main">{activePassage.source_label || activePassage.id}</h3>
               <PassageDisplay passage={activePassage} />
             </div>
           </section>
         )}
 
-        <main className={`${activePassage ? 'w-[35%]' : 'w-[80%]'} overflow-y-auto border-r border-border-subtle p-6 md:p-8`}>
-          <div className="mb-6 flex items-center justify-between border-b border-border-subtle/50 pb-4">
-            <div className="flex items-center space-x-3">
+        <main className={`w-full flex-none overflow-visible border-b border-border-subtle p-4 sm:p-6 lg:min-h-0 lg:overflow-y-auto lg:border-b-0 lg:border-r lg:p-8 ${activePassage ? 'lg:w-[35%]' : 'lg:w-[80%]'}`}>
+          <div className="mb-6 flex items-start justify-between gap-3 border-b border-border-subtle/50 pb-4 sm:items-center">
+            <div className="flex min-w-0 flex-wrap items-center gap-2 sm:gap-3">
               <span className="font-mono text-lg font-bold text-text-main">Question {reviewIdx + 1}</span>
               <span className={`rounded border px-2 py-0.5 text-[9px] font-bold font-mono uppercase tracking-wider ${tita ? 'border-brand-green/20 bg-brand-green/10 text-brand-green' : 'border-brand-blue/20 bg-brand-blue/10 text-brand-blue'}`}>{tita ? 'TITA' : 'MCQ'}</span>
               <OutcomePill outcome={outcome} />
@@ -170,9 +184,9 @@ function ResultReviewWorkspace({ attempt, reviewIdx, setReviewIdx, onBack, handl
           )}
         </main>
 
-        <aside className={`${activePassage ? 'w-[15%]' : 'w-[20%]'} flex-shrink-0 overflow-y-auto bg-bg-surface p-4`}>
+        <aside className={`w-full flex-none bg-bg-surface p-4 lg:min-h-0 lg:overflow-y-auto ${activePassage ? 'lg:w-[15%]' : 'lg:w-[20%]'}`}>
           <div className="mb-4 border-b border-border-subtle pb-2 text-[10px] font-bold font-mono uppercase tracking-wider text-text-muted">Review Palette</div>
-          <div className={`grid ${activePassage ? 'grid-cols-4' : 'grid-cols-5'} gap-1.5`}>
+          <div className={`grid grid-cols-8 gap-1.5 sm:grid-cols-10 ${activePassage ? 'lg:grid-cols-4' : 'lg:grid-cols-5'}`}>
             {questions.map((item, idx) => {
               const itemOutcome = answerOutcome(item, answers[item.id]);
               const current = idx === reviewIdx;

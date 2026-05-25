@@ -44,6 +44,7 @@ export default function App() {
   const [syncStatus, setSyncStatus] = useState({ state: 'local', label: 'Local only' });
   const syncBusyRef = useRef(false);
   const initialSyncStartedRef = useRef(false);
+  const mainContentRef = useRef(null);
 
   useEffect(() => {
     Storage.setSyncAdapter(CloudSync);
@@ -54,6 +55,11 @@ export default function App() {
   useEffect(() => {
     Storage.setTheme(theme);
   }, [theme]);
+
+  useEffect(() => {
+    mainContentRef.current?.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+    window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
+  }, [currentView]);
 
   useEffect(() => {
     fetch(`${import.meta.env.BASE_URL}questions_db.json`)
@@ -427,7 +433,7 @@ export default function App() {
           syncStatus={syncStatus}
         />
       )}
-      <div className="min-w-0 flex-grow overflow-y-auto">{renderMainView()}</div>
+      <div ref={mainContentRef} data-app-scroll-root="true" className="min-w-0 flex-grow overflow-y-auto">{renderMainView()}</div>
     </div>
   );
 }
