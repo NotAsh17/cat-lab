@@ -2,7 +2,7 @@ import { useMemo, useState } from 'react';
 import { Calendar, CheckCircle, ClipboardCheck, Copy, Eye, Info, Play } from 'lucide-react';
 import { Storage } from '../services/storage';
 import { generateDailySections, todayKey } from '../services/paperGenerator';
-import { copyText, discordScoreMessage, findDailyAttempt } from '../services/resultShare';
+import { copyScoreCard, findDailyAttempt } from '../services/resultShare';
 
 const LOOKBACK_DAYS = 14;
 
@@ -84,7 +84,7 @@ export default function Dailies({ db, history = [], onStartPractice, onOpenAttem
   const handleShareAttempt = async (event, attempt) => {
     event.stopPropagation();
     if (!attempt) return;
-    await copyText(discordScoreMessage(attempt));
+    await copyScoreCard(attempt);
     setCopiedAttemptId(attempt.id || attempt.paperId || attempt.testId);
     window.setTimeout(() => setCopiedAttemptId(''), 1800);
   };
