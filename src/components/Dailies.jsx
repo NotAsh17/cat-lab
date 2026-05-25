@@ -1,64 +1,165 @@
 import { useMemo, useState } from 'react';
-import { Calendar, Info, Play } from 'lucide-react';
+import { Calendar, CheckCircle, Info, Play } from 'lucide-react';
 import { Storage } from '../services/storage';
-import { generateDailySections } from '../services/paperGenerator';
+import { generateDailySections, todayKey } from '../services/paperGenerator';
+
+const LOOKBACK_DAYS = 14;
 
 function formatMinutes(seconds) {
   return `${Math.round(seconds / 60)} min`;
 }
 
-export default function Dailies({ db, onStartPractice }) {
-  const [dailyDone] = useState(() => Storage.getDailyDone());
+function startOfDay(date = new Date()) {
+  return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
 
-  const today = useMemo(() => new Date(), []);
-  const dayLabel = today.toLocaleDateString('en-US', {
+function addDays(date, delta) {
+  const next = startOfDay(date);
+  next.setDate(next.getDate() + delta);
+  return next;
+}
+
+function dayLabel(date) {
+  return date.toLocaleDateString('en-US', {
     weekday: 'long',
     year: 'numeric',
     month: 'long',
     day: 'numeric',
   });
+}
 
-  const daily = useMemo(() => (db ? generateDailySections(db, today) : null), [db, today]);
+function shortDayLabel(date) {
+  return date.toLocaleDateString('en-US', {
+    weekday: 'short',
+    month: 'short',
+    day: 'numeric',
+  });
+}
 
+function selectedTitle(isToday) {
+  return isToday ? "Today's Practice" : 'Past Daily Practice';
+}
+
+export default function Dailies({ db, onStartPractice }) {
+  const today = useMemo(() => startOfDay(new Date()), []);
+  const [selectedDate, setSelectedDate] = useState(today);
+  const [showCalendar, setShowCalendar] = useState(false);
+
+  const selectedDateKey = todayKey(selectedDate);
+  const currentDateKey = todayKey(today);
+  const isToday = selectedDateKey === currentDateKey;
+  const dailyDone = useMemo(() => Storage.getDailyDone(selectedDateKey), [selectedDateKey]);
+  const daily = useMemo(() => (db ? generateDailySections(db, selectedDate) : null), [db, selectedDate]);
   const sections = daily?.sections || [];
   const allDone = sections.length > 0 && sections.every((s) => dailyDone[s.dailySectionId]);
 
+  const recentDays = useMemo(() => {
+    if (!db) return [];
+    return Array.from({ length: LOOKBACK_DAYS }, (_, idx) => {
+      const date = addDays(today, -idx);
+      const key = todayKey(date);
+      const generated = generateDailySections(db, date);
+      const doneForDay = Storage.getDailyDone(key);
+      const complete = generated.sections.length > 0 && generated.sections.every((s) => doneForDay[s.dailySectionId]);
+      return {
+        key,
+        date,
+        label: shortDayLabel(date),
+        type: generated.mixed ? 'RC + VA' : '2 RCs',
+        complete,
+      };
+    });
+  }, [db, today]);
+
   const handleLogDayCompletion = () => {
-    const dayOfWeek = today.getDay();
+    const dayOfWeek = selectedDate.getDay();
     const dayIndex = dayOfWeek === 0 ? 7 : dayOfWeek;
-    Storage.completeDay(dayIndex);
-    alert('Practice logged. Streak updated.');
+    Storage.completeDay(dayIndex, selectedDateKey);
+    alert(isToday ? 'Practice logged. Streak updated.' : 'Past daily logged.');
     window.location.reload();
   };
 
   return (
-    <div className="max-w-3xl mx-auto py-8 px-6 animate-fadeIn font-sans">
+    <div className="mx-auto max-w-3xl animate-fadeIn px-4 py-6 font-sans sm:px-6 lg:py-8">
       <div className="mb-8 border-b border-border-subtle pb-4">
-        <span className="text-xs font-semibold uppercase tracking-wider text-brand-gold font-mono">
+        <span className="font-mono text-xs font-semibold uppercase tracking-wider text-brand-gold">
           Shared daily practice
         </span>
-        <h2 className="text-3xl font-bold tracking-tight text-text-main font-serif mt-1">Today's Practice</h2>
-        <p className="text-xs text-text-muted mt-2 font-mono">{dayLabel}</p>
+        <h2 className="mt-1 font-serif text-2xl font-bold tracking-tight text-text-main sm:text-3xl">{selectedTitle(isToday)}</h2>
+        <p className="mt-2 font-mono text-xs text-text-muted">{dayLabel(selectedDate)}</p>
       </div>
 
       {!db || !daily ? (
-        <div className="text-center py-16 bg-bg-surface border border-border-subtle rounded-xl font-mono text-xs text-text-muted">
+        <div className="rounded-xl border border-border-subtle bg-bg-surface py-16 text-center font-mono text-xs text-text-muted">
           Loading question bank...
         </div>
       ) : (
         <div className="space-y-6">
-          <div className="bg-bg-surface border border-border-subtle p-5 rounded-xl flex items-center justify-between gap-4">
-            <div>
-              <div className="text-[10px] font-mono text-brand-gold uppercase tracking-wider font-semibold">
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-border-subtle bg-bg-surface p-5">
+            <div className="min-w-0">
+              <div className="font-mono text-[10px] font-semibold uppercase tracking-wider text-brand-gold">
                 Daily seed
               </div>
-              <div className="text-sm font-serif font-bold text-text-main mt-1">
+              <div className="mt-1 font-serif text-sm font-bold text-text-main">
                 {daily.mixed ? '1 RC passage + 1 VA set' : '2 RC passages'}
               </div>
-              <div className="text-[10px] text-text-faint font-mono mt-2 truncate">{daily.seed}</div>
+              <div className="mt-2 truncate font-mono text-[10px] text-text-faint">{daily.seed}</div>
             </div>
-            <Calendar className="w-5 h-5 text-text-faint flex-shrink-0" />
+            <button
+              type="button"
+              onClick={() => setShowCalendar((value) => !value)}
+              className={`flex h-10 w-10 flex-shrink-0 items-center justify-center rounded-lg border transition ${
+                showCalendar ? 'border-brand-gold bg-brand-gold/10 text-brand-gold' : 'border-border-subtle bg-bg-card text-text-muted hover:border-brand-gold/40 hover:text-brand-gold'
+              }`}
+              title="Open recent dailies"
+            >
+              <Calendar className="h-5 w-5" />
+            </button>
           </div>
+
+          {showCalendar && (
+            <div className="rounded-xl border border-border-subtle bg-bg-surface p-4">
+              <div className="mb-3 flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="font-serif text-base font-bold text-text-main">Recent Dailies</h3>
+                  <p className="mt-0.5 text-xs text-text-muted">Pick a missed daily from the last {LOOKBACK_DAYS} days.</p>
+                </div>
+                {!isToday && (
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(today)}
+                    className="rounded-lg border border-border-subtle px-3 py-2 font-mono text-[10px] font-bold uppercase text-text-muted transition hover:border-brand-gold/50 hover:text-brand-gold"
+                  >
+                    Today
+                  </button>
+                )}
+              </div>
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                {recentDays.map((day) => {
+                  const selected = day.key === selectedDateKey;
+                  return (
+                    <button
+                      key={day.key}
+                      type="button"
+                      onClick={() => setSelectedDate(day.date)}
+                      className={`flex items-center justify-between gap-3 rounded-lg border px-3 py-2.5 text-left transition ${
+                        selected ? 'border-brand-gold bg-brand-gold/10' : 'border-border-subtle bg-bg-card hover:border-brand-gold/40'
+                      }`}
+                    >
+                      <span>
+                        <span className="block font-serif text-sm font-bold text-text-main">{day.label}</span>
+                        <span className="mt-0.5 block font-mono text-[10px] uppercase tracking-wider text-text-faint">{day.type}</span>
+                      </span>
+                      <span className={`inline-flex items-center gap-1 rounded px-2 py-1 font-mono text-[9px] font-bold uppercase ${day.complete ? 'bg-brand-green/10 text-brand-green' : 'bg-bg-surface text-text-faint'}`}>
+                        {day.complete && <CheckCircle className="h-3 w-3" />}
+                        {day.complete ? 'Done' : day.key === currentDateKey ? 'Today' : 'Missed'}
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           <div className="space-y-3">
             {sections.map((section) => {
@@ -66,40 +167,40 @@ export default function Dailies({ db, onStartPractice }) {
               return (
                 <div
                   key={section.id}
-                  className={`bg-bg-surface border rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 transition ${
+                  className={`flex flex-col justify-between gap-4 rounded-xl border bg-bg-surface p-5 transition sm:flex-row sm:items-center ${
                     done ? 'border-brand-green/30 bg-brand-green/[0.01] opacity-75' : 'border-border-subtle hover:border-brand-gold/30'
                   }`}
                 >
                   <div>
-                    <div className="flex items-center space-x-2 text-sm font-bold text-text-main font-serif">
+                    <div className="flex items-center space-x-2 font-serif text-sm font-bold text-text-main">
                       <span>{section.label}</span>
                       {done && (
-                        <span className="inline-flex items-center text-[9px] text-brand-green bg-brand-green/10 px-2 py-0.5 rounded font-mono font-semibold uppercase">
+                        <span className="inline-flex rounded bg-brand-green/10 px-2 py-0.5 font-mono text-[9px] font-semibold uppercase text-brand-green">
                           Done
                         </span>
                       )}
                     </div>
-                    <div className="text-xs text-text-muted mt-1">{section.sublabel}</div>
-                    <div className="text-[10px] text-text-faint font-mono mt-2">
+                    <div className="mt-1 text-xs text-text-muted">{section.sublabel}</div>
+                    <div className="mt-2 font-mono text-[10px] text-text-faint">
                       {section.questionCount} questions | {formatMinutes(section.durationSec)}
                     </div>
                   </div>
 
                   <div className="flex items-center space-x-2 self-end sm:self-auto">
                     {done ? (
-                      <span className="text-brand-green text-xs font-mono font-bold">COMPLETE</span>
+                      <span className="font-mono text-xs font-bold text-brand-green">COMPLETE</span>
                     ) : (
                       <>
                         <button
-                          onClick={() => onStartPractice({ ...section.paper, dailySectionId: section.dailySectionId }, false)}
-                          className="px-4 py-2 bg-brand-gold hover:bg-brand-gold-hover text-bg-base rounded-lg text-xs font-semibold font-mono tracking-wide transition shadow-[0_4px_12px_rgba(201,150,74,0.15)] flex items-center space-x-1"
+                          onClick={() => onStartPractice({ ...section.paper, dailySectionId: section.dailySectionId, dailyDayKey: daily.dateKey }, false)}
+                          className="flex items-center space-x-1 rounded-lg bg-brand-gold px-4 py-2 font-mono text-xs font-semibold tracking-wide text-bg-base shadow-[0_4px_12px_rgba(201,150,74,0.15)] transition hover:bg-brand-gold-hover"
                         >
-                          <Play className="w-3 h-3 fill-current" />
+                          <Play className="h-3 w-3 fill-current" />
                           <span>Start</span>
                         </button>
                         <button
-                          onClick={() => onStartPractice({ ...section.paper, dailySectionId: section.dailySectionId }, true)}
-                          className="px-3 py-2 border border-border-subtle hover:border-text-muted text-text-muted hover:text-text-main rounded-lg text-xs font-semibold font-mono transition"
+                          onClick={() => onStartPractice({ ...section.paper, dailySectionId: section.dailySectionId, dailyDayKey: daily.dateKey }, true)}
+                          className="rounded-lg border border-border-subtle px-3 py-2 font-mono text-xs font-semibold text-text-muted transition hover:border-text-muted hover:text-text-main"
                         >
                           Untimed
                         </button>
@@ -112,24 +213,24 @@ export default function Dailies({ db, onStartPractice }) {
           </div>
 
           {allDone && (
-            <div className="bg-brand-green/5 border border-brand-green/20 p-6 rounded-xl text-center space-y-4 animate-fadeIn">
-              <h3 className="text-base font-bold font-serif text-text-main">Today's practice complete.</h3>
-              <p className="text-xs text-text-muted max-w-md mx-auto leading-relaxed">
-                Log completion to update the practice grid and streak.
+            <div className="animate-fadeIn space-y-4 rounded-xl border border-brand-green/20 bg-brand-green/5 p-6 text-center">
+              <h3 className="font-serif text-base font-bold text-text-main">{isToday ? "Today's practice complete." : 'Selected daily complete.'}</h3>
+              <p className="mx-auto max-w-md text-xs leading-relaxed text-text-muted">
+                {isToday ? 'Log completion to update the practice grid and streak.' : 'This past daily is marked complete for your account.'}
               </p>
               <button
                 onClick={handleLogDayCompletion}
-                className="px-6 py-2.5 bg-brand-green hover:bg-brand-green-hover text-white rounded-lg text-xs font-bold font-mono tracking-wider transition"
+                className="rounded-lg bg-brand-green px-6 py-2.5 font-mono text-xs font-bold tracking-wider text-white transition hover:bg-brand-green/90"
               >
-                Log Completion
+                {isToday ? 'Log Completion' : 'Log Past Daily'}
               </button>
             </div>
           )}
 
-          <div className="bg-bg-surface border border-border-subtle p-4 rounded-xl flex items-start space-x-3 text-xs text-text-muted">
-            <Info className="w-4 h-4 text-brand-gold flex-shrink-0 mt-0.5" />
+          <div className="flex items-start space-x-3 rounded-xl border border-border-subtle bg-bg-surface p-4 text-xs text-text-muted">
+            <Info className="mt-0.5 h-4 w-4 flex-shrink-0 text-brand-gold" />
             <div className="leading-relaxed">
-              <span className="font-semibold text-text-main block mb-1">Shared daily rules</span>
+              <span className="mb-1 block font-semibold text-text-main">Shared daily rules</span>
               Daily papers use the same date and bank version seed for everyone. RC timers are 3 minutes per question; VA sets are 15 minutes.
             </div>
           </div>

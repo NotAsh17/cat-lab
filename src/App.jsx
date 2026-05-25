@@ -181,7 +181,7 @@ export default function App() {
 
   const handleFinishTest = (attemptResult) => {
     if (attemptResult.testType === 'daily_practice' && attemptResult.dailySectionId) {
-      Storage.setDailyDone(attemptResult.dailySectionId);
+      Storage.setDailyDone(attemptResult.dailySectionId, attemptResult.dailyDayKey);
     }
     Storage.saveAttempt(attemptResult);
     setActiveAttempt(attemptResult);

@@ -75,7 +75,7 @@ export function buildIndexes(db) {
   return { varcQuestions, passages, qaQuestions, questionMap, passageMap, questionsByPassage };
 }
 
-function makePaper({ id, seed, blueprintId, shared, durationSec, questions, passageIds = [], bankVersion, warnings = [] }) {
+function makePaper({ id, seed, blueprintId, shared, durationSec, questions, passageIds = [], bankVersion, warnings = [], dailyDayKey = null }) {
   const sourceMix = {};
   const typeMix = {};
   questions.forEach((q) => {
@@ -95,6 +95,7 @@ function makePaper({ id, seed, blueprintId, shared, durationSec, questions, pass
     sourceMix,
     typeMix,
     warnings,
+    dailyDayKey,
   };
 }
 
@@ -170,6 +171,7 @@ export function generateDailySections(db, date = new Date()) {
         questions,
         passageIds: [p.id],
         bankVersion,
+        dailyDayKey: dateKey,
       }),
     };
   });
@@ -190,6 +192,7 @@ export function generateDailySections(db, date = new Date()) {
         durationSec: 900,
         questions,
         bankVersion,
+        dailyDayKey: dateKey,
       }),
     });
   }

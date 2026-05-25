@@ -236,6 +236,7 @@ export default function TestRunner({
       seed: paper?.seed,
       blueprintId: paper?.blueprintId,
       dailySectionId: paper?.dailySectionId,
+      dailyDayKey: paper?.dailyDayKey,
       score,
       max: questions.length * 3,
       correct,

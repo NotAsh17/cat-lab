@@ -95,6 +95,16 @@ function emitSyncStatus(status) {
   });
 }
 
+function completedStorageKey(dayKey, sectionId) {
+  return `${dayKey}:${sectionId}`;
+}
+
+function parseCompletedStorageKey(key, completedAt) {
+  const match = String(key).match(/^(\d{4}-\d{2}-\d{2}):(.+)$/);
+  if (match) return { dayKey: match[1], sectionId: match[2] };
+  return { dayKey: localDateKey(new Date(completedAt)), sectionId: key };
+}
+
 migrateLegacyLocalState();
 
 export const Storage = {
@@ -263,21 +273,23 @@ export const Storage = {
   getCompletedDayRows() {
     const rows = [];
     const days = this.getCompletedDays();
-    Object.entries(days).forEach(([sectionId, completedAt]) => {
+    Object.entries(days).forEach(([key, completedAt]) => {
       if (!completedAt) return;
+      const parsed = parseCompletedStorageKey(key, completedAt);
       rows.push({
-        sectionId,
-        dayKey: localDateKey(new Date(completedAt)),
+        sectionId: parsed.sectionId,
+        dayKey: parsed.dayKey,
         completedAt,
       });
     });
 
-    const dailyDone = this.getDailyDone();
-    Object.entries(dailyDone).forEach(([sectionId, done]) => {
+    const legacyDaily = safeJsonParse(localStorage.getItem(dailyDoneKey()), null);
+    Object.entries(legacyDaily || {}).forEach(([sectionId, done]) => {
       if (sectionId === '_date' || !done) return;
+      const dayKey = legacyDaily._date || localDateKey();
       rows.push({
         sectionId,
-        dayKey: dailyDone._date || localDateKey(),
+        dayKey,
         completedAt: new Date().toISOString(),
       });
     });
@@ -292,9 +304,9 @@ export const Storage = {
     rows.forEach((row) => {
       const sectionId = row.sectionId || row.section_id;
       const completedAt = row.completedAt || row.completed_at || new Date().toISOString();
-      const dayKey = row.dayKey || row.day_key;
-      if (!sectionId) return;
-      days[sectionId] = completedAt;
+      const dayKey = row.dayKey || row.day_key || localDateKey(new Date(completedAt));
+      if (!sectionId || !dayKey) return;
+      days[completedStorageKey(dayKey, sectionId)] = completedAt;
       if (dayKey === today) dailyDone[sectionId] = true;
     });
 
@@ -302,35 +314,50 @@ export const Storage = {
     localStorage.setItem(dailyDoneKey(), JSON.stringify(dailyDone));
   },
 
-  completeDay(dayNumber) {
+  completeDay(dayNumber, dayKey = localDateKey()) {
     const days = this.getCompletedDays();
-    days[dayNumber] = new Date().toISOString();
+    const sectionId = `day-${dayNumber}`;
+    days[completedStorageKey(dayKey, sectionId)] = new Date().toISOString();
     localStorage.setItem(scopedKey(KEYS.COMPLETED_DAYS), JSON.stringify(days));
-    this.updateStreak();
-    this.syncWithSupabase('day_complete', { sectionId: String(dayNumber) });
+    if (dayKey === localDateKey()) this.updateStreak();
+    this.syncWithSupabase('day_complete', { sectionId, dayKey });
   },
 
   resetDays() {
     localStorage.removeItem(scopedKey(KEYS.COMPLETED_DAYS));
   },
 
-  getDailyDone() {
-    const today = localDateKey();
+  getDailyDone(dayKey = localDateKey()) {
+    const done = { _date: dayKey };
+    this.getCompletedDayRows().forEach((row) => {
+      if (row.dayKey === dayKey) done[row.sectionId] = true;
+    });
+
     const raw = localStorage.getItem(dailyDoneKey());
-    if (!raw) return { _date: today };
+    if (!raw) return done;
     try {
       const parsed = JSON.parse(raw);
-      return parsed._date === today ? parsed : { _date: today };
+      if (parsed._date === dayKey) {
+        Object.entries(parsed).forEach(([sectionId, value]) => {
+          if (sectionId !== '_date' && value) done[sectionId] = true;
+        });
+      }
+      return done;
     } catch {
-      return { _date: today };
+      return done;
     }
   },
 
-  setDailyDone(sectionId) {
-    const done = this.getDailyDone();
+  setDailyDone(sectionId, dayKey = localDateKey()) {
+    const completedAt = new Date().toISOString();
+    const days = this.getCompletedDays();
+    days[completedStorageKey(dayKey, sectionId)] = completedAt;
+    this.setCompletedDays(days);
+
+    const done = this.getDailyDone(dayKey);
     done[sectionId] = true;
     localStorage.setItem(dailyDoneKey(), JSON.stringify(done));
-    this.syncWithSupabase('day_complete', { sectionId, dayKey: done._date });
+    this.syncWithSupabase('day_complete', { sectionId, dayKey, completedAt });
   },
 
   clearDailyDone() {
