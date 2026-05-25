@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { Bookmark, BookmarkCheck, BookOpen, CheckCircle, ChevronLeft, HelpCircle, RotateCcw, XCircle } from 'lucide-react';
+import { Bookmark, BookmarkCheck, BookOpen, CheckCircle, ChevronLeft, ChevronRight, ClipboardCheck, Copy, HelpCircle, RotateCcw, XCircle } from 'lucide-react';
 import { Storage } from '../services/storage';
 import { answerOutcome, correctAnswer, displayInstruction, isQaQuestion, isTitaQuestion, questionPreview, sourceLabel } from '../services/questionUtils';
 import { optionDisplayKey, shouldStripOptionKeys } from '../services/optionRenderUtils';
@@ -18,8 +18,100 @@ function resetResultsScroll() {
   document.body.scrollTop = 0;
 }
 
-export default function Results({ attempt, onRetake, onBackToDashboard }) {
+function dateLabel(dayKey) {
+  if (!dayKey || !/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return 'Practice';
+  const [year, month, day] = dayKey.split('-').map(Number);
+  return new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day));
+}
+
+function dailySectionLabel(attempt) {
+  if (attempt?.dailySectionId?.startsWith('rc')) return `RC ${attempt.dailySectionId.replace('rc', '')}`;
+  if (attempt?.dailySectionId?.startsWith('va')) return 'VA Set';
+  return attempt?.paper?.blueprintId || attempt?.testType || 'Practice';
+}
+
+function attemptShareTitle(attempt) {
+  if (attempt?.testType === 'daily_practice') {
+    return `CAT Daily Practice - ${dateLabel(attempt.dailyDayKey)} - ${dailySectionLabel(attempt)}`;
+  }
+  if (attempt?.testType === 'varc_sectional') return 'CAT VARC Sectional';
+  if (attempt?.testType === 'qa_sectional') return 'CAT QA Sectional';
+  if (attempt?.testType === 'full_mock') return 'CAT Full Mock';
+  return 'CAT Practice Result';
+}
+
+function scoreFields(attempt) {
+  const attempted = (attempt.correct || 0) + (attempt.wrong || 0);
+  const accuracy = attempted ? Math.round(((attempt.correct || 0) / attempted) * 100) : 0;
+  const pace = attempted ? Math.round((attempt.timeUsed || 0) / attempted) : 0;
+  return {
+    attempted,
+    accuracy,
+    pace,
+    score: `${attempt.score || 0} / ${attempt.max || 0}`,
+    correct: String(attempt.correct || 0),
+    wrong: String(attempt.wrong || 0),
+    skipped: String(attempt.skipped || 0),
+    time: formatDuration(attempt.timeUsed || 0),
+  };
+}
+
+function discordScoreMessage(attempt) {
+  const fields = scoreFields(attempt);
+  const name = Storage.getUsername() || 'CAT Student';
+  return [
+    `**${attemptShareTitle(attempt)}**`,
+    `Player: ${name}`,
+    `Score: **${fields.score}** | Accuracy: **${fields.accuracy}%** | Time: **${fields.time}**`,
+    `Correct: ${fields.correct} | Wrong: ${fields.wrong} | Skipped: ${fields.skipped} | Pace: ${fields.pace}s/q`,
+    `Paper: \`${attempt.paperId || attempt.testId || 'local-practice'}\``,
+  ].join('\n');
+}
+
+function discordEmbedPayload(attempt) {
+  const fields = scoreFields(attempt);
+  const name = Storage.getUsername() || 'CAT Student';
+  return {
+    content: `${name} completed ${attemptShareTitle(attempt)}.`,
+    embeds: [
+      {
+        title: attemptShareTitle(attempt),
+        color: 13211210,
+        fields: [
+          { name: 'Player', value: name, inline: true },
+          { name: 'Score', value: fields.score, inline: true },
+          { name: 'Accuracy', value: `${fields.accuracy}%`, inline: true },
+          { name: 'Correct', value: fields.correct, inline: true },
+          { name: 'Wrong', value: fields.wrong, inline: true },
+          { name: 'Skipped', value: fields.skipped, inline: true },
+          { name: 'Time', value: fields.time, inline: true },
+          { name: 'Pace', value: `${fields.pace}s/q`, inline: true },
+        ],
+        footer: { text: `CAT Catalyst | ${attempt.paperId || attempt.testId || 'local-practice'}` },
+      },
+    ],
+  };
+}
+
+async function copyText(text) {
+  if (navigator.clipboard?.writeText) {
+    await navigator.clipboard.writeText(text);
+    return;
+  }
+  const textarea = document.createElement('textarea');
+  textarea.value = text;
+  textarea.setAttribute('readonly', '');
+  textarea.style.position = 'fixed';
+  textarea.style.opacity = '0';
+  document.body.appendChild(textarea);
+  textarea.select();
+  document.execCommand('copy');
+  textarea.remove();
+}
+
+export default function Results({ attempt, onRetake, onBackToDashboard, nextDailySection = null, onStartNextDaily }) {
   const [reviewIdx, setReviewIdx] = useState(null);
+  const [copiedShare, setCopiedShare] = useState('');
   const [, setBookmarksUpdated] = useState(false);
 
   useEffect(() => {
@@ -30,6 +122,15 @@ export default function Results({ attempt, onRetake, onBackToDashboard }) {
 
   const { testId, score, max, correct, wrong, skipped, timeUsed, answers = {}, questions = [], questionStats = {} } = attempt;
   const acc = correct + wrong ? Math.round((correct / (correct + wrong)) * 100) : 0;
+
+  const handleCopyShare = async (kind) => {
+    const text = kind === 'embed'
+      ? JSON.stringify(discordEmbedPayload(attempt), null, 2)
+      : discordScoreMessage(attempt);
+    await copyText(text);
+    setCopiedShare(kind);
+    window.setTimeout(() => setCopiedShare(''), 1800);
+  };
 
   const handleBookmarkToggle = (e, q) => {
     e?.stopPropagation?.();
@@ -71,10 +172,18 @@ export default function Results({ attempt, onRetake, onBackToDashboard }) {
             Accuracy: <span className="font-bold text-brand-gold">{acc}%</span> | Time Used: <span className="font-bold">{formatDuration(timeUsed)}</span>
           </p>
         </div>
-        <button onClick={onRetake} className="flex items-center justify-center space-x-1.5 rounded-xl border border-border-subtle bg-bg-card px-5 py-2.5 text-xs font-bold font-mono text-text-muted transition hover:border-text-muted hover:text-text-main">
-          <RotateCcw className="h-3.5 w-3.5" />
-          <span>Retake Practice</span>
-        </button>
+        <div className="flex w-full flex-col gap-2 md:w-auto">
+          {nextDailySection && (
+            <button onClick={() => onStartNextDaily?.(nextDailySection)} className="flex items-center justify-center space-x-1.5 rounded-xl bg-brand-gold px-5 py-2.5 text-xs font-bold font-mono text-bg-base transition hover:bg-brand-gold-hover">
+              <span>Next Daily: {nextDailySection.label}</span>
+              <ChevronRight className="h-3.5 w-3.5" />
+            </button>
+          )}
+          <button onClick={onRetake} className="flex items-center justify-center space-x-1.5 rounded-xl border border-border-subtle bg-bg-card px-5 py-2.5 text-xs font-bold font-mono text-text-muted transition hover:border-text-muted hover:text-text-main">
+            <RotateCcw className="h-3.5 w-3.5" />
+            <span>Retake Practice</span>
+          </button>
+        </div>
       </div>
 
       <div className="mb-8 grid grid-cols-2 gap-4 text-center md:grid-cols-4">
@@ -82,6 +191,33 @@ export default function Results({ attempt, onRetake, onBackToDashboard }) {
         <Stat label="Wrong" value={`-${wrong}`} sub="MCQ penalty only" cls="text-brand-red" />
         <Stat label="Skipped" value={skipped} sub="0 penalty" cls="text-text-muted" />
         <Stat label="Pace / Question" value={`${correct + wrong ? Math.round(timeUsed / (correct + wrong)) : 0}s`} sub="attempted average" cls="text-text-main" />
+      </div>
+
+      <div className="mb-8 rounded-xl border border-border-subtle bg-bg-surface p-4">
+        <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
+          <div>
+            <h3 className="font-serif text-lg font-bold text-text-main">Discord Share</h3>
+            <p className="mt-1 text-xs leading-relaxed text-text-muted">Copy a daily score message now, or copy webhook embed JSON for a bot/Supabase function later.</p>
+          </div>
+        </div>
+        <div className="flex flex-col gap-2 sm:flex-row">
+          <button
+            type="button"
+            onClick={() => handleCopyShare('message')}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-bg-card px-4 py-2 text-xs font-bold font-mono text-text-muted transition hover:border-brand-gold/50 hover:text-text-main"
+          >
+            {copiedShare === 'message' ? <ClipboardCheck className="h-3.5 w-3.5 text-brand-green" /> : <Copy className="h-3.5 w-3.5" />}
+            <span>{copiedShare === 'message' ? 'Copied Message' : 'Copy Discord Message'}</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => handleCopyShare('embed')}
+            className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-bg-card px-4 py-2 text-xs font-bold font-mono text-text-muted transition hover:border-brand-gold/50 hover:text-text-main"
+          >
+            {copiedShare === 'embed' ? <ClipboardCheck className="h-3.5 w-3.5 text-brand-green" /> : <Copy className="h-3.5 w-3.5" />}
+            <span>{copiedShare === 'embed' ? 'Copied Embed JSON' : 'Copy Embed JSON'}</span>
+          </button>
+        </div>
       </div>
 
       <h3 className="mb-4 font-mono text-lg font-semibold text-text-main">Question Review</h3>

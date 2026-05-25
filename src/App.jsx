@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Play } from 'lucide-react';
 import { Storage } from './services/storage';
-import { generatePaper, weeklySeeds } from './services/paperGenerator';
+import { generateDailySections, generatePaper, weeklySeeds } from './services/paperGenerator';
 import { answerOutcome, isQaQuestion } from './services/questionUtils';
 import Sidebar from './components/Sidebar';
 import Dashboard from './components/Dashboard';
@@ -28,6 +28,12 @@ function mergeByIdPreferNewest(localRows = [], cloudRows = [], dateKey = 'comple
     if (!previous || rowTime(row, dateKey) >= rowTime(previous, dateKey)) map.set(row.id, row);
   });
   return Array.from(map.values());
+}
+
+function dateFromDayKey(dayKey) {
+  if (!dayKey || !/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return new Date();
+  const [year, month, day] = dayKey.split('-').map(Number);
+  return new Date(year, month - 1, day);
 }
 
 export default function App() {
@@ -202,6 +208,31 @@ export default function App() {
     else if (activeTestConfig.testType === 'full_mock') setView('test_runner_mock');
     else if (activeTestConfig.testType === 'practice' || activeTestConfig.testType === 'bookmarks') setView('test_runner_practice');
     else setView('test_runner_daily');
+  };
+
+  const getNextDailySection = () => {
+    if (!db || activeAttempt?.testType !== 'daily_practice' || !activeAttempt.dailyDayKey) return null;
+    const daily = generateDailySections(db, dateFromDayKey(activeAttempt.dailyDayKey));
+    const done = Storage.getDailyDone(activeAttempt.dailyDayKey);
+    const currentIndex = daily.sections.findIndex((section) => section.dailySectionId === activeAttempt.dailySectionId);
+    const ordered = currentIndex >= 0
+      ? [...daily.sections.slice(currentIndex + 1), ...daily.sections.slice(0, currentIndex)]
+      : daily.sections;
+    const section = ordered.find((item) => !done[item.dailySectionId]);
+    if (!section) return null;
+    return {
+      ...section,
+      paper: {
+        ...section.paper,
+        dailySectionId: section.dailySectionId,
+        dailyDayKey: daily.dateKey,
+      },
+    };
+  };
+
+  const handleStartNextDaily = (section) => {
+    if (!section?.paper) return;
+    startTestRunner('daily_practice', section.paper.id, false, null, section.paper);
   };
 
   const handleOpenAttempt = (attempt) => {
@@ -412,7 +443,15 @@ export default function App() {
           />
         );
       case 'results':
-        return <Results attempt={activeAttempt} onRetake={handleRetake} onBackToDashboard={() => setView('dashboard')} />;
+        return (
+          <Results
+            attempt={activeAttempt}
+            onRetake={handleRetake}
+            onBackToDashboard={() => setView('dashboard')}
+            nextDailySection={getNextDailySection()}
+            onStartNextDaily={handleStartNextDaily}
+          />
+        );
       default:
         return <Dashboard setView={setView} stats={stats} history={history} onOpenAttempt={handleOpenAttempt} />;
     }
