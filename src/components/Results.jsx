@@ -3,11 +3,8 @@ import { Bookmark, BookmarkCheck, BookOpen, CheckCircle, ChevronLeft, ChevronRig
 import { Storage } from '../services/storage';
 import { answerOutcome, correctAnswer, displayInstruction, isQaQuestion, isTitaQuestion, questionPreview, sourceLabel } from '../services/questionUtils';
 import { optionDisplayKey, shouldStripOptionKeys } from '../services/optionRenderUtils';
+import { copyText, discordEmbedPayload, discordScoreMessage, formatDuration } from '../services/resultShare';
 import { OptionContent, PassageDisplay, QuestionExplanation, QuestionStem } from './QuestionDisplay';
-
-function formatDuration(secs = 0) {
-  return `${Math.floor(secs / 60)}m ${String(secs % 60).padStart(2, '0')}s`;
-}
 
 function resetResultsScroll() {
   if (typeof window === 'undefined') return;
@@ -16,97 +13,6 @@ function resetResultsScroll() {
   window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
   document.documentElement.scrollTop = 0;
   document.body.scrollTop = 0;
-}
-
-function dateLabel(dayKey) {
-  if (!dayKey || !/^\d{4}-\d{2}-\d{2}$/.test(dayKey)) return 'Practice';
-  const [year, month, day] = dayKey.split('-').map(Number);
-  return new Intl.DateTimeFormat('en-IN', { weekday: 'short', day: 'numeric', month: 'short', year: 'numeric' }).format(new Date(year, month - 1, day));
-}
-
-function dailySectionLabel(attempt) {
-  if (attempt?.dailySectionId?.startsWith('rc')) return `RC ${attempt.dailySectionId.replace('rc', '')}`;
-  if (attempt?.dailySectionId?.startsWith('va')) return 'VA Set';
-  return attempt?.paper?.blueprintId || attempt?.testType || 'Practice';
-}
-
-function attemptShareTitle(attempt) {
-  if (attempt?.testType === 'daily_practice') {
-    return `CAT Daily Practice - ${dateLabel(attempt.dailyDayKey)} - ${dailySectionLabel(attempt)}`;
-  }
-  if (attempt?.testType === 'varc_sectional') return 'CAT VARC Sectional';
-  if (attempt?.testType === 'qa_sectional') return 'CAT QA Sectional';
-  if (attempt?.testType === 'full_mock') return 'CAT Full Mock';
-  return 'CAT Practice Result';
-}
-
-function scoreFields(attempt) {
-  const attempted = (attempt.correct || 0) + (attempt.wrong || 0);
-  const accuracy = attempted ? Math.round(((attempt.correct || 0) / attempted) * 100) : 0;
-  const pace = attempted ? Math.round((attempt.timeUsed || 0) / attempted) : 0;
-  return {
-    attempted,
-    accuracy,
-    pace,
-    score: `${attempt.score || 0} / ${attempt.max || 0}`,
-    correct: String(attempt.correct || 0),
-    wrong: String(attempt.wrong || 0),
-    skipped: String(attempt.skipped || 0),
-    time: formatDuration(attempt.timeUsed || 0),
-  };
-}
-
-function discordScoreMessage(attempt) {
-  const fields = scoreFields(attempt);
-  const name = Storage.getUsername() || 'CAT Student';
-  return [
-    `**${attemptShareTitle(attempt)}**`,
-    `Player: ${name}`,
-    `Score: **${fields.score}** | Accuracy: **${fields.accuracy}%** | Time: **${fields.time}**`,
-    `Correct: ${fields.correct} | Wrong: ${fields.wrong} | Skipped: ${fields.skipped} | Pace: ${fields.pace}s/q`,
-    `Paper: \`${attempt.paperId || attempt.testId || 'local-practice'}\``,
-  ].join('\n');
-}
-
-function discordEmbedPayload(attempt) {
-  const fields = scoreFields(attempt);
-  const name = Storage.getUsername() || 'CAT Student';
-  return {
-    content: `${name} completed ${attemptShareTitle(attempt)}.`,
-    embeds: [
-      {
-        title: attemptShareTitle(attempt),
-        color: 13211210,
-        fields: [
-          { name: 'Player', value: name, inline: true },
-          { name: 'Score', value: fields.score, inline: true },
-          { name: 'Accuracy', value: `${fields.accuracy}%`, inline: true },
-          { name: 'Correct', value: fields.correct, inline: true },
-          { name: 'Wrong', value: fields.wrong, inline: true },
-          { name: 'Skipped', value: fields.skipped, inline: true },
-          { name: 'Time', value: fields.time, inline: true },
-          { name: 'Pace', value: `${fields.pace}s/q`, inline: true },
-        ],
-        footer: { text: `CAT Catalyst | ${attempt.paperId || attempt.testId || 'local-practice'}` },
-      },
-    ],
-  };
-}
-
-async function copyText(text) {
-  if (navigator.clipboard?.writeText) {
-    await navigator.clipboard.writeText(text);
-    return;
-  }
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand('copy');
-  textarea.remove();
 }
 
 export default function Results({ attempt, onRetake, onBackToDashboard, nextDailySection = null, onStartNextDaily }) {

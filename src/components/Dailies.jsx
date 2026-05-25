@@ -1,7 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Calendar, CheckCircle, Info, Play } from 'lucide-react';
+import { Calendar, CheckCircle, ClipboardCheck, Copy, Eye, Info, Play } from 'lucide-react';
 import { Storage } from '../services/storage';
 import { generateDailySections, todayKey } from '../services/paperGenerator';
+import { copyText, discordScoreMessage, findDailyAttempt } from '../services/resultShare';
 
 const LOOKBACK_DAYS = 14;
 
@@ -40,10 +41,11 @@ function selectedTitle(isToday) {
   return isToday ? "Today's Practice" : 'Past Daily Practice';
 }
 
-export default function Dailies({ db, onStartPractice }) {
+export default function Dailies({ db, history = [], onStartPractice, onOpenAttempt }) {
   const today = useMemo(() => startOfDay(new Date()), []);
   const [selectedDate, setSelectedDate] = useState(today);
   const [showCalendar, setShowCalendar] = useState(false);
+  const [copiedAttemptId, setCopiedAttemptId] = useState('');
 
   const selectedDateKey = todayKey(selectedDate);
   const currentDateKey = todayKey(today);
@@ -77,6 +79,14 @@ export default function Dailies({ db, onStartPractice }) {
     Storage.completeDay(dayIndex, selectedDateKey);
     alert(isToday ? 'Practice logged. Streak updated.' : 'Past daily logged.');
     window.location.reload();
+  };
+
+  const handleShareAttempt = async (event, attempt) => {
+    event.stopPropagation();
+    if (!attempt) return;
+    await copyText(discordScoreMessage(attempt));
+    setCopiedAttemptId(attempt.id || attempt.paperId || attempt.testId);
+    window.setTimeout(() => setCopiedAttemptId(''), 1800);
   };
 
   return (
@@ -164,11 +174,24 @@ export default function Dailies({ db, onStartPractice }) {
           <div className="space-y-3">
             {sections.map((section) => {
               const done = !!dailyDone[section.dailySectionId];
+              const attempt = done ? findDailyAttempt(history, selectedDateKey, section.dailySectionId) : null;
+              const canOpenResult = Boolean(attempt && onOpenAttempt);
+              const copied = copiedAttemptId && copiedAttemptId === (attempt?.id || attempt?.paperId || attempt?.testId);
               return (
                 <div
                   key={section.id}
+                  role={canOpenResult ? 'button' : undefined}
+                  tabIndex={canOpenResult ? 0 : undefined}
+                  onClick={() => {
+                    if (canOpenResult) onOpenAttempt(attempt);
+                  }}
+                  onKeyDown={(event) => {
+                    if (!canOpenResult || (event.key !== 'Enter' && event.key !== ' ')) return;
+                    event.preventDefault();
+                    onOpenAttempt(attempt);
+                  }}
                   className={`flex flex-col justify-between gap-4 rounded-xl border bg-bg-surface p-5 transition sm:flex-row sm:items-center ${
-                    done ? 'border-brand-green/30 bg-brand-green/[0.01] opacity-75' : 'border-border-subtle hover:border-brand-gold/30'
+                    done ? `border-brand-green/30 bg-brand-green/[0.01] ${canOpenResult ? 'cursor-pointer hover:border-brand-gold/40 hover:bg-brand-green/[0.03]' : 'opacity-75'}` : 'border-border-subtle hover:border-brand-gold/30'
                   }`}
                 >
                   <div>
@@ -188,7 +211,31 @@ export default function Dailies({ db, onStartPractice }) {
 
                   <div className="flex items-center space-x-2 self-end sm:self-auto">
                     {done ? (
-                      <span className="font-mono text-xs font-bold text-brand-green">COMPLETE</span>
+                      attempt ? (
+                        <>
+                          <button
+                            type="button"
+                            onClick={(event) => {
+                              event.stopPropagation();
+                              onOpenAttempt?.(attempt);
+                            }}
+                            className="inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-bg-card px-3 py-2 font-mono text-xs font-semibold text-text-muted transition hover:border-brand-gold/50 hover:text-text-main"
+                          >
+                            <Eye className="h-3.5 w-3.5" />
+                            <span>Result</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={(event) => handleShareAttempt(event, attempt)}
+                            className="inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-bg-card px-3 py-2 font-mono text-xs font-semibold text-text-muted transition hover:border-brand-gold/50 hover:text-text-main"
+                          >
+                            {copied ? <ClipboardCheck className="h-3.5 w-3.5 text-brand-green" /> : <Copy className="h-3.5 w-3.5" />}
+                            <span>{copied ? 'Copied' : 'Share'}</span>
+                          </button>
+                        </>
+                      ) : (
+                        <span className="font-mono text-xs font-bold text-brand-green">COMPLETE</span>
+                      )
                     ) : (
                       <>
                         <button

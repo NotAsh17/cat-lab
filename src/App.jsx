@@ -403,7 +403,7 @@ export default function App() {
       case 'dashboard':
         return <Dashboard setView={setView} stats={stats} history={history} onOpenAttempt={handleOpenAttempt} />;
       case 'dailies':
-        return <Dailies db={db} onStartPractice={(paper, isUntimed) => startTestRunner('daily_practice', paper.id, isUntimed, null, paper)} />;
+        return <Dailies db={db} history={history} onOpenAttempt={handleOpenAttempt} onStartPractice={(paper, isUntimed) => startTestRunner('daily_practice', paper.id, isUntimed, null, paper)} />;
       case 'practice':
         return <Practice db={db} onStartPractice={(typeId, isUntimed) => startTestRunner('practice', typeId, isUntimed)} />;
       case 'varc_sectional':
