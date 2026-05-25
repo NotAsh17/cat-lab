@@ -3,7 +3,7 @@ import { Bookmark, BookmarkCheck, BookOpen, CheckCircle, ChevronLeft, ChevronRig
 import { Storage } from '../services/storage';
 import { answerOutcome, correctAnswer, displayInstruction, isQaQuestion, isTitaQuestion, questionPreview, sourceLabel } from '../services/questionUtils';
 import { optionDisplayKey, shouldStripOptionKeys } from '../services/optionRenderUtils';
-import { copyScoreCard, copyText, discordEmbedPayload, discordScoreMessage, formatDuration } from '../services/resultShare';
+import { copyScoreCard, formatDuration } from '../services/resultShare';
 import { OptionContent, PassageDisplay, QuestionExplanation, QuestionStem } from './QuestionDisplay';
 
 function resetResultsScroll() {
@@ -18,6 +18,7 @@ function resetResultsScroll() {
 export default function Results({ attempt, onRetake, onBackToDashboard, nextDailySection = null, onStartNextDaily }) {
   const [reviewIdx, setReviewIdx] = useState(null);
   const [copiedShare, setCopiedShare] = useState('');
+  const [downloadedShare, setDownloadedShare] = useState('');
   const [, setBookmarksUpdated] = useState(false);
 
   useEffect(() => {
@@ -29,18 +30,14 @@ export default function Results({ attempt, onRetake, onBackToDashboard, nextDail
   const { testId, score, max, correct, wrong, skipped, timeUsed, answers = {}, questions = [], questionStats = {} } = attempt;
   const acc = correct + wrong ? Math.round((correct / (correct + wrong)) * 100) : 0;
 
-  const handleCopyShare = async (kind) => {
-    if (kind === 'card') {
-      await copyScoreCard(attempt);
-      setCopiedShare(kind);
-      window.setTimeout(() => setCopiedShare(''), 1800);
+  const handleCopyScoreCard = async () => {
+    const status = await copyScoreCard(attempt);
+    if (status === 'download') {
+      setDownloadedShare('card');
+      window.setTimeout(() => setDownloadedShare(''), 1800);
       return;
     }
-    const text = kind === 'embed'
-      ? JSON.stringify(discordEmbedPayload(attempt), null, 2)
-      : discordScoreMessage(attempt);
-    await copyText(text);
-    setCopiedShare(kind);
+    setCopiedShare('card');
     window.setTimeout(() => setCopiedShare(''), 1800);
   };
 
@@ -109,33 +106,17 @@ export default function Results({ attempt, onRetake, onBackToDashboard, nextDail
         <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
           <div>
             <h3 className="font-serif text-lg font-bold text-text-main">Discord Share</h3>
-            <p className="mt-1 text-xs leading-relaxed text-text-muted">Copy a designed score-card image for Discord, with text and embed JSON available as backups.</p>
+            <p className="mt-1 text-xs leading-relaxed text-text-muted">Copy a designed score-card image for Discord. If image clipboard is blocked, the PNG downloads instead.</p>
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
-            onClick={() => handleCopyShare('card')}
+            onClick={handleCopyScoreCard}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-brand-gold px-4 py-2 text-xs font-bold font-mono text-bg-base transition hover:bg-brand-gold-hover"
           >
-            {copiedShare === 'card' ? <ClipboardCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            <span>{copiedShare === 'card' ? 'Copied Score Card' : 'Copy Score Card'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleCopyShare('message')}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-bg-card px-4 py-2 text-xs font-bold font-mono text-text-muted transition hover:border-brand-gold/50 hover:text-text-main"
-          >
-            {copiedShare === 'message' ? <ClipboardCheck className="h-3.5 w-3.5 text-brand-green" /> : <Copy className="h-3.5 w-3.5" />}
-            <span>{copiedShare === 'message' ? 'Copied Message' : 'Copy Discord Message'}</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => handleCopyShare('embed')}
-            className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-bg-card px-4 py-2 text-xs font-bold font-mono text-text-muted transition hover:border-brand-gold/50 hover:text-text-main"
-          >
-            {copiedShare === 'embed' ? <ClipboardCheck className="h-3.5 w-3.5 text-brand-green" /> : <Copy className="h-3.5 w-3.5" />}
-            <span>{copiedShare === 'embed' ? 'Copied Embed JSON' : 'Copy Embed JSON'}</span>
+            {copiedShare === 'card' || downloadedShare === 'card' ? <ClipboardCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
+            <span>{copiedShare === 'card' ? 'Copied Score Card' : downloadedShare === 'card' ? 'Downloaded Score Card' : 'Copy Score Card'}</span>
           </button>
         </div>
       </div>

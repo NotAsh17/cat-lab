@@ -46,6 +46,7 @@ export default function Dailies({ db, history = [], onStartPractice, onOpenAttem
   const [selectedDate, setSelectedDate] = useState(today);
   const [showCalendar, setShowCalendar] = useState(false);
   const [copiedAttemptId, setCopiedAttemptId] = useState('');
+  const [downloadedAttemptId, setDownloadedAttemptId] = useState('');
 
   const selectedDateKey = todayKey(selectedDate);
   const currentDateKey = todayKey(today);
@@ -84,8 +85,14 @@ export default function Dailies({ db, history = [], onStartPractice, onOpenAttem
   const handleShareAttempt = async (event, attempt) => {
     event.stopPropagation();
     if (!attempt) return;
-    await copyScoreCard(attempt);
-    setCopiedAttemptId(attempt.id || attempt.paperId || attempt.testId);
+    const status = await copyScoreCard(attempt);
+    const id = attempt.id || attempt.paperId || attempt.testId;
+    if (status === 'download') {
+      setDownloadedAttemptId(id);
+      window.setTimeout(() => setDownloadedAttemptId(''), 1800);
+      return;
+    }
+    setCopiedAttemptId(id);
     window.setTimeout(() => setCopiedAttemptId(''), 1800);
   };
 
@@ -177,6 +184,7 @@ export default function Dailies({ db, history = [], onStartPractice, onOpenAttem
               const attempt = done ? findDailyAttempt(history, selectedDateKey, section.dailySectionId) : null;
               const canOpenResult = Boolean(attempt && onOpenAttempt);
               const copied = copiedAttemptId && copiedAttemptId === (attempt?.id || attempt?.paperId || attempt?.testId);
+              const downloaded = downloadedAttemptId && downloadedAttemptId === (attempt?.id || attempt?.paperId || attempt?.testId);
               return (
                 <div
                   key={section.id}
@@ -229,8 +237,8 @@ export default function Dailies({ db, history = [], onStartPractice, onOpenAttem
                             onClick={(event) => handleShareAttempt(event, attempt)}
                             className="inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-bg-card px-3 py-2 font-mono text-xs font-semibold text-text-muted transition hover:border-brand-gold/50 hover:text-text-main"
                           >
-                            {copied ? <ClipboardCheck className="h-3.5 w-3.5 text-brand-green" /> : <Copy className="h-3.5 w-3.5" />}
-                            <span>{copied ? 'Copied' : 'Share'}</span>
+                            {copied || downloaded ? <ClipboardCheck className="h-3.5 w-3.5 text-brand-green" /> : <Copy className="h-3.5 w-3.5" />}
+                            <span>{copied ? 'Copied' : downloaded ? 'Downloaded' : 'Share'}</span>
                           </button>
                         </>
                       ) : (

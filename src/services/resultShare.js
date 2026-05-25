@@ -66,43 +66,6 @@ export function scoreFields(attempt) {
   };
 }
 
-export function discordScoreMessage(attempt) {
-  const fields = scoreFields(attempt);
-  const name = Storage.getUsername() || 'CAT Student';
-  return [
-    `**${attemptShareTitle(attempt)}**`,
-    `Player: ${name}`,
-    `Score: **${fields.score}** | Accuracy: **${fields.accuracy}%** | Time: **${fields.time}**`,
-    `Correct: ${fields.correct} | Wrong: ${fields.wrong} | Skipped: ${fields.skipped} | Pace: ${fields.pace}s/q`,
-    `Paper: \`${attempt?.paperId || attempt?.testId || 'local-practice'}\``,
-  ].join('\n');
-}
-
-export function discordEmbedPayload(attempt) {
-  const fields = scoreFields(attempt);
-  const name = Storage.getUsername() || 'CAT Student';
-  return {
-    content: `${name} completed ${attemptShareTitle(attempt)}.`,
-    embeds: [
-      {
-        title: attemptShareTitle(attempt),
-        color: 13211210,
-        fields: [
-          { name: 'Player', value: name, inline: true },
-          { name: 'Score', value: fields.score, inline: true },
-          { name: 'Accuracy', value: `${fields.accuracy}%`, inline: true },
-          { name: 'Correct', value: fields.correct, inline: true },
-          { name: 'Wrong', value: fields.wrong, inline: true },
-          { name: 'Skipped', value: fields.skipped, inline: true },
-          { name: 'Time', value: fields.time, inline: true },
-          { name: 'Pace', value: `${fields.pace}s/q`, inline: true },
-        ],
-        footer: { text: `CAT Catalyst | ${attempt?.paperId || attempt?.testId || 'local-practice'}` },
-      },
-    ],
-  };
-}
-
 function roundedRect(ctx, x, y, width, height, radius) {
   ctx.beginPath();
   ctx.moveTo(x + radius, y);
@@ -119,11 +82,11 @@ function roundedRect(ctx, x, y, width, height, radius) {
 
 function drawPill(ctx, x, y, label, value, color) {
   roundedRect(ctx, x, y, 188, 76, 16);
-  ctx.fillStyle = '#15171c';
+  ctx.fillStyle = '#ffffff';
   ctx.fill();
-  ctx.strokeStyle = '#272b33';
+  ctx.strokeStyle = '#ded7c8';
   ctx.stroke();
-  ctx.fillStyle = '#858a96';
+  ctx.fillStyle = '#6c6253';
   ctx.font = '700 17px Bookerly, Georgia, serif';
   ctx.fillText(label, x + 22, y + 28);
   ctx.fillStyle = color;
@@ -133,11 +96,16 @@ function drawPill(ctx, x, y, label, value, color) {
 
 function canvasToBlob(canvas) {
   return new Promise((resolve) => {
-    canvas.toBlob((blob) => resolve(blob), 'image/png', 0.96);
+    const dataUrl = canvas.toDataURL('image/png');
+    fetch(dataUrl)
+      .then((response) => response.blob())
+      .then(resolve)
+      .catch(() => canvas.toBlob((blob) => resolve(blob), 'image/png', 0.96));
   });
 }
 
 export async function createScoreCardBlob(attempt) {
+  await document.fonts?.ready;
   const fields = scoreFields(attempt);
   const name = Storage.getUsername() || 'CAT Student';
   const title = attemptShareTitle(attempt);
@@ -146,75 +114,86 @@ export async function createScoreCardBlob(attempt) {
   canvas.height = 520;
   const ctx = canvas.getContext('2d');
 
-  ctx.fillStyle = '#090a0d';
+  ctx.fillStyle = '#efe7d8';
   ctx.fillRect(0, 0, canvas.width, canvas.height);
   roundedRect(ctx, 24, 24, 872, 472, 24);
-  ctx.fillStyle = '#101217';
+  ctx.fillStyle = '#fbf7ef';
   ctx.fill();
-  ctx.strokeStyle = '#2c3038';
+  ctx.strokeStyle = '#c9964a';
   ctx.lineWidth = 2;
   ctx.stroke();
 
-  ctx.fillStyle = '#c9964a';
+  ctx.fillStyle = '#8a5a14';
   ctx.font = '700 19px Bookerly, Georgia, serif';
   ctx.fillText('CAT CATALYST', 60, 72);
 
-  ctx.fillStyle = '#f1ede5';
+  ctx.fillStyle = '#1f2428';
   ctx.font = '700 34px Bookerly, Georgia, serif';
   ctx.fillText(title, 60, 121);
 
-  ctx.fillStyle = '#9ba1ad';
+  ctx.fillStyle = '#5d6470';
   ctx.font = '400 23px Bookerly, Georgia, serif';
   ctx.fillText(`Player: ${name}`, 60, 160);
 
   roundedRect(ctx, 60, 196, 312, 176, 22);
-  ctx.fillStyle = '#15171c';
+  ctx.fillStyle = '#ffffff';
   ctx.fill();
-  ctx.strokeStyle = '#2a2e36';
+  ctx.strokeStyle = '#ded7c8';
   ctx.stroke();
-  ctx.fillStyle = '#858a96';
+  ctx.fillStyle = '#6c6253';
   ctx.font = '700 19px Bookerly, Georgia, serif';
   ctx.fillText('SCORE', 90, 237);
   ctx.fillStyle = Number(attempt?.score || 0) >= 0 ? '#e0b06a' : '#c45050';
   ctx.font = '700 74px Bookerly, Georgia, serif';
   ctx.fillText(String(attempt?.score || 0), 88, 318);
-  ctx.fillStyle = '#747986';
+  ctx.fillStyle = '#7a7164';
   ctx.font = '700 30px Bookerly, Georgia, serif';
   ctx.fillText(`/ ${attempt?.max || 0}`, 196, 318);
-  ctx.fillStyle = '#9ba1ad';
+  ctx.fillStyle = '#5d6470';
   ctx.font = '400 18px Bookerly, Georgia, serif';
   ctx.fillText(`${fields.accuracy}% accuracy`, 90, 350);
 
   drawPill(ctx, 404, 196, 'Correct', fields.correct, '#3d9e6b');
   drawPill(ctx, 612, 196, 'Wrong', fields.wrong, '#c45050');
-  drawPill(ctx, 404, 292, 'Skipped', fields.skipped, '#a4a7b0');
-  drawPill(ctx, 612, 292, 'Time', fields.time, '#e0b06a');
+  drawPill(ctx, 404, 292, 'Skipped', fields.skipped, '#69717d');
+  drawPill(ctx, 612, 292, 'Time', fields.time, '#8a5a14');
 
-  ctx.strokeStyle = '#272b33';
+  ctx.strokeStyle = '#ded7c8';
   ctx.beginPath();
   ctx.moveTo(60, 408);
   ctx.lineTo(860, 408);
   ctx.stroke();
 
-  ctx.fillStyle = '#858a96';
+  ctx.fillStyle = '#6c6253';
   ctx.font = '700 17px Bookerly, Georgia, serif';
   ctx.fillText('PACE', 60, 444);
-  ctx.fillStyle = '#f1ede5';
+  ctx.fillStyle = '#1f2428';
   ctx.font = '700 23px Bookerly, Georgia, serif';
   ctx.fillText(`${fields.pace}s/q`, 116, 444);
 
-  ctx.fillStyle = '#858a96';
+  ctx.fillStyle = '#6c6253';
   ctx.font = '700 17px Bookerly, Georgia, serif';
   ctx.fillText('PAPER', 232, 444);
-  ctx.fillStyle = '#f1ede5';
+  ctx.fillStyle = '#1f2428';
   ctx.font = '400 20px Consolas, Monaco, monospace';
   ctx.fillText(String(attempt?.paperId || attempt?.testId || 'local-practice').slice(0, 48), 296, 444);
 
-  ctx.fillStyle = '#4e545f';
+  ctx.fillStyle = '#8a8174';
   ctx.font = '400 15px Bookerly, Georgia, serif';
   ctx.fillText('Generated for Discord sharing', 60, 478);
 
   return canvasToBlob(canvas);
+}
+
+function downloadScoreCard(blob) {
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement('a');
+  link.href = url;
+  link.download = 'cat-catalyst-score-card.png';
+  document.body.appendChild(link);
+  link.click();
+  link.remove();
+  window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 export async function copyScoreCard(attempt) {
@@ -224,29 +203,13 @@ export async function copyScoreCard(attempt) {
       await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
       return 'card';
     } catch {
-      // Fall through to text copy if image clipboard is blocked.
+      downloadScoreCard(blob);
+      return 'download';
     }
   }
-  await copyText(discordScoreMessage(attempt));
-  return 'message';
-}
-
-export async function copyText(text) {
-  if (navigator.clipboard?.writeText) {
-    try {
-      await navigator.clipboard.writeText(text);
-      return;
-    } catch {
-      // Fall through to the textarea copy path for stricter browser contexts.
-    }
+  if (blob) {
+    downloadScoreCard(blob);
+    return 'download';
   }
-  const textarea = document.createElement('textarea');
-  textarea.value = text;
-  textarea.setAttribute('readonly', '');
-  textarea.style.position = 'fixed';
-  textarea.style.opacity = '0';
-  document.body.appendChild(textarea);
-  textarea.select();
-  document.execCommand('copy');
-  textarea.remove();
+  return 'failed';
 }
