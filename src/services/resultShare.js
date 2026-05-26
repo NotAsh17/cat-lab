@@ -94,17 +94,16 @@ function drawPill(ctx, x, y, label, value, color) {
   ctx.fillText(value, x + 22, y + 59);
 }
 
-function canvasToBlob(canvas) {
-  return new Promise((resolve) => {
-    const dataUrl = canvas.toDataURL('image/png');
-    fetch(dataUrl)
-      .then((response) => response.blob())
-      .then(resolve)
-      .catch(() => canvas.toBlob((blob) => resolve(blob), 'image/png', 0.96));
-  });
+function dataUrlToBlob(dataUrl) {
+  const [meta, base64] = dataUrl.split(',');
+  const mimeMatch = meta.match(/data:([^;]+)/);
+  const binary = atob(base64 || '');
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i += 1) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: mimeMatch?.[1] || 'image/png' });
 }
 
-export async function createScoreCardBlob(attempt) {
+export async function createScoreCardImage(attempt) {
   await document.fonts?.ready;
   const fields = scoreFields(attempt);
   const name = Storage.getUsername() || 'CAT Student';
@@ -182,7 +181,15 @@ export async function createScoreCardBlob(attempt) {
   ctx.font = '400 15px Bookerly, Georgia, serif';
   ctx.fillText('Generated for Discord sharing', 60, 478);
 
-  return canvasToBlob(canvas);
+  const dataUrl = canvas.toDataURL('image/png');
+  return {
+    blob: dataUrlToBlob(dataUrl),
+    dataUrl,
+  };
+}
+
+export async function createScoreCardBlob(attempt) {
+  return (await createScoreCardImage(attempt)).blob;
 }
 
 export function scoreCardFilename(attempt) {
@@ -206,17 +213,18 @@ function downloadBlob(blob, filename) {
 }
 
 export async function createScoreCardFile(attempt) {
-  const blob = await createScoreCardBlob(attempt);
+  const image = await createScoreCardImage(attempt);
+  const blob = image?.blob;
   if (!blob) return null;
   return {
     blob,
     filename: scoreCardFilename(attempt),
-    url: URL.createObjectURL(blob),
+    url: image.dataUrl,
   };
 }
 
 export function revokeScoreCardFile(file) {
-  if (file?.url) URL.revokeObjectURL(file.url);
+  if (file?.url?.startsWith('blob:')) URL.revokeObjectURL(file.url);
 }
 
 export function saveScoreCardFile(file) {
