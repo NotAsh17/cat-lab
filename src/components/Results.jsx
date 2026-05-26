@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { Bookmark, BookmarkCheck, BookOpen, CheckCircle, ChevronLeft, ChevronRight, ClipboardCheck, Copy, HelpCircle, RotateCcw, XCircle } from 'lucide-react';
+import { Bookmark, BookmarkCheck, BookOpen, CheckCircle, ChevronLeft, ChevronRight, Download, HelpCircle, RotateCcw, XCircle } from 'lucide-react';
 import { Storage } from '../services/storage';
 import { answerOutcome, correctAnswer, displayInstruction, isQaQuestion, isTitaQuestion, questionPreview, sourceLabel } from '../services/questionUtils';
 import { optionDisplayKey, shouldStripOptionKeys } from '../services/optionRenderUtils';
-import { copyScoreCard, formatDuration } from '../services/resultShare';
+import { createScoreCardFile, formatDuration, revokeScoreCardFile, saveScoreCardFile } from '../services/resultShare';
 import { OptionContent, PassageDisplay, QuestionExplanation, QuestionStem } from './QuestionDisplay';
 
 function resetResultsScroll() {
@@ -17,28 +17,31 @@ function resetResultsScroll() {
 
 export default function Results({ attempt, onRetake, onBackToDashboard, nextDailySection = null, onStartNextDaily }) {
   const [reviewIdx, setReviewIdx] = useState(null);
-  const [copiedShare, setCopiedShare] = useState('');
   const [downloadedShare, setDownloadedShare] = useState('');
+  const [scoreCardFile, setScoreCardFile] = useState(null);
   const [, setBookmarksUpdated] = useState(false);
 
   useEffect(() => {
     if (attempt) resetResultsScroll();
   }, [attempt, reviewIdx]);
 
+  useEffect(() => () => revokeScoreCardFile(scoreCardFile), [scoreCardFile]);
+
   if (!attempt) return null;
 
   const { testId, score, max, correct, wrong, skipped, timeUsed, answers = {}, questions = [], questionStats = {} } = attempt;
   const acc = correct + wrong ? Math.round((correct / (correct + wrong)) * 100) : 0;
 
-  const handleCopyScoreCard = async () => {
-    const status = await copyScoreCard(attempt);
+  const handleDownloadScoreCard = async () => {
+    if (scoreCardFile) revokeScoreCardFile(scoreCardFile);
+    const file = await createScoreCardFile(attempt);
+    if (!file) return;
+    setScoreCardFile(file);
+    const status = saveScoreCardFile(file);
     if (status === 'download') {
       setDownloadedShare('card');
       window.setTimeout(() => setDownloadedShare(''), 1800);
-      return;
     }
-    setCopiedShare('card');
-    window.setTimeout(() => setCopiedShare(''), 1800);
   };
 
   const handleBookmarkToggle = (e, q) => {
@@ -106,19 +109,31 @@ export default function Results({ attempt, onRetake, onBackToDashboard, nextDail
         <div className="mb-3 flex flex-col justify-between gap-2 sm:flex-row sm:items-center">
           <div>
             <h3 className="font-serif text-lg font-bold text-text-main">Discord Share</h3>
-            <p className="mt-1 text-xs leading-relaxed text-text-muted">Copy a designed score-card image for Discord. If image clipboard is blocked, the PNG downloads instead.</p>
+            <p className="mt-1 text-xs leading-relaxed text-text-muted">Download a designed score-card PNG and upload that file to Discord.</p>
           </div>
         </div>
         <div className="flex flex-col gap-2 sm:flex-row">
           <button
             type="button"
-            onClick={handleCopyScoreCard}
+            onClick={handleDownloadScoreCard}
             className="inline-flex items-center justify-center gap-2 rounded-lg border border-border-subtle bg-brand-gold px-4 py-2 text-xs font-bold font-mono text-bg-base transition hover:bg-brand-gold-hover"
           >
-            {copiedShare === 'card' || downloadedShare === 'card' ? <ClipboardCheck className="h-3.5 w-3.5" /> : <Copy className="h-3.5 w-3.5" />}
-            <span>{copiedShare === 'card' ? 'Copied Score Card' : downloadedShare === 'card' ? 'Downloaded Score Card' : 'Copy Score Card'}</span>
+            {downloadedShare === 'card' ? <CheckCircle className="h-3.5 w-3.5" /> : <Download className="h-3.5 w-3.5" />}
+            <span>{downloadedShare === 'card' ? 'Downloaded PNG' : 'Download Score PNG'}</span>
           </button>
         </div>
+        {scoreCardFile && (
+          <div className="mt-4 rounded-xl border border-border-subtle bg-bg-card p-3">
+            <img
+              src={scoreCardFile.url}
+              alt="Generated score card preview"
+              className="w-full rounded-lg border border-border-subtle bg-[#efe7d8]"
+            />
+            <p className="mt-2 font-mono text-[10px] leading-relaxed text-text-faint">
+              File: {scoreCardFile.filename}. Upload this PNG to Discord; the in-app browser may block native downloads.
+            </p>
+          </div>
+        )}
       </div>
 
       <h3 className="mb-4 font-mono text-lg font-semibold text-text-main">Question Review</h3>

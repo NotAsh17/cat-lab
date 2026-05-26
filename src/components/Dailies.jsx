@@ -1,8 +1,8 @@
 import { useMemo, useState } from 'react';
-import { Calendar, CheckCircle, ClipboardCheck, Copy, Eye, Info, Play } from 'lucide-react';
+import { Calendar, CheckCircle, Download, Eye, Info, Play } from 'lucide-react';
 import { Storage } from '../services/storage';
 import { generateDailySections, todayKey } from '../services/paperGenerator';
-import { copyScoreCard, findDailyAttempt } from '../services/resultShare';
+import { downloadScoreCard, findDailyAttempt } from '../services/resultShare';
 
 const LOOKBACK_DAYS = 14;
 
@@ -45,7 +45,6 @@ export default function Dailies({ db, history = [], onStartPractice, onOpenAttem
   const today = useMemo(() => startOfDay(new Date()), []);
   const [selectedDate, setSelectedDate] = useState(today);
   const [showCalendar, setShowCalendar] = useState(false);
-  const [copiedAttemptId, setCopiedAttemptId] = useState('');
   const [downloadedAttemptId, setDownloadedAttemptId] = useState('');
 
   const selectedDateKey = todayKey(selectedDate);
@@ -85,15 +84,12 @@ export default function Dailies({ db, history = [], onStartPractice, onOpenAttem
   const handleShareAttempt = async (event, attempt) => {
     event.stopPropagation();
     if (!attempt) return;
-    const status = await copyScoreCard(attempt);
+    const status = await downloadScoreCard(attempt);
     const id = attempt.id || attempt.paperId || attempt.testId;
     if (status === 'download') {
       setDownloadedAttemptId(id);
       window.setTimeout(() => setDownloadedAttemptId(''), 1800);
-      return;
     }
-    setCopiedAttemptId(id);
-    window.setTimeout(() => setCopiedAttemptId(''), 1800);
   };
 
   return (
@@ -183,7 +179,6 @@ export default function Dailies({ db, history = [], onStartPractice, onOpenAttem
               const done = !!dailyDone[section.dailySectionId];
               const attempt = done ? findDailyAttempt(history, selectedDateKey, section.dailySectionId) : null;
               const canOpenResult = Boolean(attempt && onOpenAttempt);
-              const copied = copiedAttemptId && copiedAttemptId === (attempt?.id || attempt?.paperId || attempt?.testId);
               const downloaded = downloadedAttemptId && downloadedAttemptId === (attempt?.id || attempt?.paperId || attempt?.testId);
               return (
                 <div
@@ -237,8 +232,8 @@ export default function Dailies({ db, history = [], onStartPractice, onOpenAttem
                             onClick={(event) => handleShareAttempt(event, attempt)}
                             className="inline-flex items-center gap-1 rounded-lg border border-border-subtle bg-bg-card px-3 py-2 font-mono text-xs font-semibold text-text-muted transition hover:border-brand-gold/50 hover:text-text-main"
                           >
-                            {copied || downloaded ? <ClipboardCheck className="h-3.5 w-3.5 text-brand-green" /> : <Copy className="h-3.5 w-3.5" />}
-                            <span>{copied ? 'Copied' : downloaded ? 'Downloaded' : 'Share'}</span>
+                            {downloaded ? <CheckCircle className="h-3.5 w-3.5 text-brand-green" /> : <Download className="h-3.5 w-3.5" />}
+                            <span>{downloaded ? 'Downloaded' : 'PNG'}</span>
                           </button>
                         </>
                       ) : (

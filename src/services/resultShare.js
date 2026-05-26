@@ -185,31 +185,49 @@ export async function createScoreCardBlob(attempt) {
   return canvasToBlob(canvas);
 }
 
-function downloadScoreCard(blob) {
+export function scoreCardFilename(attempt) {
+  const raw = String(attempt?.paperId || attempt?.testId || attempt?.id || 'local-practice')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 72);
+  return `cat-catalyst-${raw || 'score-card'}.png`;
+}
+
+function downloadBlob(blob, filename) {
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = 'cat-catalyst-score-card.png';
+  link.download = filename;
   document.body.appendChild(link);
   link.click();
   link.remove();
   window.setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
-export async function copyScoreCard(attempt) {
+export async function createScoreCardFile(attempt) {
   const blob = await createScoreCardBlob(attempt);
-  if (blob && navigator.clipboard?.write && window.ClipboardItem) {
-    try {
-      await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-      return 'card';
-    } catch {
-      downloadScoreCard(blob);
-      return 'download';
-    }
-  }
-  if (blob) {
-    downloadScoreCard(blob);
-    return 'download';
-  }
-  return 'failed';
+  if (!blob) return null;
+  return {
+    blob,
+    filename: scoreCardFilename(attempt),
+    url: URL.createObjectURL(blob),
+  };
+}
+
+export function revokeScoreCardFile(file) {
+  if (file?.url) URL.revokeObjectURL(file.url);
+}
+
+export function saveScoreCardFile(file) {
+  if (!file?.blob) return 'failed';
+  downloadBlob(file.blob, file.filename || 'cat-catalyst-score-card.png');
+  return 'download';
+}
+
+export async function downloadScoreCard(attempt) {
+  const file = await createScoreCardFile(attempt);
+  const status = saveScoreCardFile(file);
+  revokeScoreCardFile(file);
+  return status;
 }
